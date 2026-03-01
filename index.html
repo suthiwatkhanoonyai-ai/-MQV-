@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MQV Calculator</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body{
+    font-family: Arial;
+    background:#f0f8ff;
+    padding:20px;
+}
+.container{
+    max-width:1000px;
+    margin:auto;
+    background:white;
+    padding:25px;
+    border-radius:12px;
+    box-shadow:0 0 10px rgba(0,0,0,0.1);
+}
+h2{
+    text-align:center;
+    color:#007acc;
+}
+input,button{
+    width:100%;
+    padding:8px;
+    margin:6px 0 12px 0;
+}
+button{
+    background:#007acc;
+    color:white;
+    border:none;
+    cursor:pointer;
+}
+button:hover{ background:#005f99; }
+.lang-btn{
+    width:auto;
+    float:right;
+}
+.result,.history{
+    background:#e6f2ff;
+    padding:15px;
+    border-radius:10px;
+    margin-top:15px;
+}
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+th,td{
+    border:1px solid #ccc;
+    padding:6px;
+    text-align:center;
+}
+.view-btn{
+    background:#005f99;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<button class="lang-btn" onclick="toggleLang()">EN / ไทย</button>
+<h2 id="title">การคำนวณส่วนต่างปริมาณวัตถุดิบ (MQV)</h2>
+
+<label id="l1">ชื่อผลิตภัณฑ์</label>
+<input type="text" id="product" onkeydown="nextField(event,'aq')">
+
+<label id="l2">ปริมาณจริงที่ใช้ (AQ)</label>
+<input type="number" id="aq" onkeydown="nextField(event,'sq')">
+
+<label id="l3">ปริมาณมาตรฐาน (SQ)</label>
+<input type="number" id="sq" onkeydown="nextField(event,'sp')">
+
+<label id="l4">ราคามาตรฐาน (SP)</label>
+<input type="number" id="sp" onkeydown="nextField(event,'unit')">
+
+<label id="l5">หน่วยนับ</label>
+<input type="text" id="unit" onkeydown="nextField(event,'calcBtn')">
+
+<button id="calcBtn" onclick="calculate()">คำนวณ</button>
+<button onclick="exportPDF()">Export PDF</button>
+<button onclick="exportExcel()">Export Excel</button>
+
+<div class="result" id="output"></div>
+<canvas id="chart"></canvas>
+
+<div class="history">
+<h3 id="historyTitle">ประวัติการคำนวณ</h3>
+<table id="historyTable">
+<tr>
+<th>Product</th><th>AQ</th><th>SQ</th><th>SP</th><th>MQV</th><th>View</th>
+</tr>
+</table>
+</div>
+
+</div>
+
+<script>
+
+let chart;
+let lang="th";
+let historyData=[];
+
+function nextField(e,nextId){
+    if(e.key==="Enter"){
+        e.preventDefault();
+        document.getElementById(nextId).focus();
+    }
+}
+
+function toggleLang(){
+    lang = lang==="th"?"en":"th";
+
+    document.getElementById("title").innerText =
+    lang==="th"?
+    "การคำนวณส่วนต่างปริมาณวัตถุดิบ (MQV)":
+    "Material Quantity Variance (MQV) Calculator";
+
+    document.getElementById("l1").innerText = lang==="th"?"ชื่อผลิตภัณฑ์":"Product Name";
+    document.getElementById("l2").innerText = lang==="th"?"ปริมาณจริงที่ใช้ (AQ)":"Actual Quantity (AQ)";
+    document.getElementById("l3").innerText = lang==="th"?"ปริมาณมาตรฐาน (SQ)":"Standard Quantity (SQ)";
+    document.getElementById("l4").innerText = lang==="th"?"ราคามาตรฐาน (SP)":"Standard Price (SP)";
+    document.getElementById("l5").innerText = lang==="th"?"หน่วยนับ":"Unit";
+    document.getElementById("calcBtn").innerText = lang==="th"?"คำนวณ":"Calculate";
+    document.getElementById("historyTitle").innerText = lang==="th"?"ประวัติการคำนวณ":"Calculation History";
+}
+
+function calculate(save=true){
+
+    const p=document.getElementById("product").value;
+    const aq=parseFloat(document.getElementById("aq").value);
+    const sq=parseFloat(document.getElementById("sq").value);
+    const sp=parseFloat(document.getElementById("sp").value);
+    const unit=document.getElementById("unit").value;
+
+    const mqv=(aq-sq)*sp;
+
+    let status = mqv>0 ? 
+    (lang==="th"?"ไม่พึงพอใจ (Unfavorable)":"Unfavorable") :
+    (lang==="th"?"พึงพอใจ (Favorable)":"Favorable");
+
+    let analysisText="";
+
+    if(mqv>0){
+        analysisText = lang==="th" ?
+        "ผลลัพธ์เป็นบวก แสดงว่าการใช้วัตถุดิบเกินมาตรฐาน ทำให้ต้นทุนสูงกว่าที่กำหนด อาจเกิดจากของเสียสูง การควบคุมกระบวนการผลิตไม่ดี เครื่องจักรไม่มีประสิทธิภาพ หรือคุณภาพวัตถุดิบต่ำ ควรตรวจสอบอัตราของเสีย วิเคราะห์ขั้นตอนการผลิต ปรับปรุงการควบคุมภายใน และฝึกอบรมพนักงานเพื่อเพิ่มประสิทธิภาพ"
+        :
+        "Positive result indicates excessive material usage beyond standard. This increases production cost. Possible causes include high waste rate, poor production control, inefficient machinery, or low-quality materials. Management should review waste rate, improve process control, enhance internal control, and train employees.";
+    }else{
+        analysisText = lang==="th" ?
+        "ผลลัพธ์เป็นลบ แสดงว่าการใช้วัตถุดิบต่ำกว่ามาตรฐาน ซึ่งสะท้อนถึงประสิทธิภาพที่ดี อย่างไรก็ตามควรตรวจสอบว่ามาตรฐานที่ตั้งไว้เหมาะสมหรือไม่ และรักษาระดับประสิทธิภาพนี้อย่างต่อเนื่อง"
+        :
+        "Negative result indicates material usage below standard, reflecting efficiency. However, management should ensure that the standard is realistic and maintain this performance level consistently.";
+    }
+
+    document.getElementById("output").innerHTML=`
+<b>${lang==="th"?"สูตร":"Formula"}:</b> (AQ - SQ) × SP <br>
+(${aq} - ${sq}) × ${sp} = <b>${mqv.toFixed(2)}</b><br><br>
+
+<b>${lang==="th"?"ความหมายของตัวเลข":"Meaning of Variables"}:</b><br>
+AQ = ${aq} (${lang==="th"?"ปริมาณจริงที่ใช้":"Actual Quantity"})<br>
+SQ = ${sq} (${lang==="th"?"ปริมาณมาตรฐาน":"Standard Quantity"})<br>
+SP = ${sp} (${lang==="th"?"ราคามาตรฐาน":"Standard Price"})<br><br>
+
+<b>${lang==="th"?"สถานะ":"Status"}:</b> ${status}<br><br>
+
+<b>${lang==="th"?"วิเคราะห์ผลลัพธ์":"Analysis"}:</b><br>
+${analysisText}
+`;
+
+    if(save) saveHistory(p,aq,sq,sp,mqv,unit);
+
+    if(chart) chart.destroy();
+    chart=new Chart(document.getElementById("chart"),{
+        type:'bar',
+        data:{
+            labels:['AQ','SQ'],
+            datasets:[{
+                label:'Quantity Comparison',
+                data:[aq,sq],
+                backgroundColor:['#007acc','#99ccff']
+            }]
+        }
+    });
+}
+
+function saveHistory(p,aq,sq,sp,mqv,unit){
+    const record={p,aq,sq,sp,mqv,unit};
+    historyData.push(record);
+
+    let table=document.getElementById("historyTable");
+    let row=table.insertRow();
+
+    row.insertCell(0).innerText=p;
+    row.insertCell(1).innerText=aq;
+    row.insertCell(2).innerText=sq;
+    row.insertCell(3).innerText=sp;
+    row.insertCell(4).innerText=mqv.toFixed(2);
+
+    let cell=row.insertCell(5);
+    let btn=document.createElement("button");
+    btn.innerText="View";
+    btn.className="view-btn";
+    btn.onclick=function(){ loadHistory(record); };
+    cell.appendChild(btn);
+}
+
+function loadHistory(record){
+    document.getElementById("product").value=record.p;
+    document.getElementById("aq").value=record.aq;
+    document.getElementById("sq").value=record.sq;
+    document.getElementById("sp").value=record.sp;
+    document.getElementById("unit").value=record.unit;
+    calculate(false);
+}
+
+function exportPDF(){
+    const { jsPDF }=window.jspdf;
+    const doc=new jsPDF();
+    doc.text(document.getElementById("output").innerText,10,10);
+    doc.save("MQV_Result.pdf");
+}
+
+function exportExcel(){
+    let table=document.getElementById("historyTable");
+    let wb=XLSX.utils.table_to_book(table,{sheet:"MQV"});
+    XLSX.writeFile(wb,"MQV_History.xlsx");
+}
+
+</script>
+
+</body>
+</html>
