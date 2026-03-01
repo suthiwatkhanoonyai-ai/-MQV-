@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MQV Professional Analysis</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body{font-family:Arial;background:#f0f8ff;margin:0;padding:20px;}
+.container{max-width:1100px;margin:auto;background:white;padding:25px;border-radius:12px;box-shadow:0 0 12px rgba(0,0,0,0.1);}
+h2{text-align:center;color:#007acc;}
+input,button{width:100%;padding:8px;margin:6px 0;}
+button{background:#007acc;color:white;border:none;cursor:pointer;border-radius:6px;}
+button:hover{background:#005f99;}
+.lang-btn{width:auto;float:right;}
+.result,.history{background:#e6f2ff;padding:15px;border-radius:10px;margin-top:15px;}
+table{width:100%;border-collapse:collapse;}
+th,td{border:1px solid #ccc;padding:6px;text-align:center;}
+.view-btn{background:#005f99;color:white;border:none;padding:5px;border-radius:4px;}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<button class="lang-btn" onclick="toggleLang()">EN / ไทย</button>
+<h2 id="title"></h2>
+
+<label id="l1"></label>
+<input type="text" id="product">
+
+<label id="l2"></label>
+<input type="number" id="aq">
+
+<label id="l3"></label>
+<input type="number" id="sq">
+
+<label id="l4"></label>
+<input type="number" id="sp">
+
+<label id="l5"></label>
+<input type="text" id="unit">
+
+<button onclick="calculate()" id="calcBtn"></button>
+
+<div class="result" id="output"></div>
+<canvas id="chart"></canvas>
+
+<div class="history">
+<h3 id="historyTitle"></h3>
+<table id="historyTable"></table>
+</div>
+
+</div>
+
+<script>
+
+let chart;
+let lang="th";
+let historyData=[];
+let lastKey=null;
+let currentRecord=null;
+let analysisIndex=0;
+
+const TEXT={
+th:{
+title:"การวิเคราะห์ส่วนต่างปริมาณวัตถุดิบ (MQV)",
+product:"ชื่อผลิตภัณฑ์",
+aq:"ปริมาณจริง (AQ)",
+sq:"ปริมาณมาตรฐาน (SQ)",
+sp:"ราคามาตรฐาน (SP)",
+unit:"หน่วย",
+calc:"คำนวณ",
+history:"ประวัติการคำนวณ",
+headers:["สินค้า","AQ","SQ","SP","MQV","ดูข้อมูล"]
+},
+en:{
+title:"Material Quantity Variance (MQV) Analysis",
+product:"Product",
+aq:"Actual Quantity (AQ)",
+sq:"Standard Quantity (SQ)",
+sp:"Standard Price (SP)",
+unit:"Unit",
+calc:"Calculate",
+history:"Calculation History",
+headers:["Product","AQ","SQ","SP","MQV","View"]
+}
+};
+
+function applyLanguage(){
+document.getElementById("title").innerText=TEXT[lang].title;
+document.getElementById("l1").innerText=TEXT[lang].product;
+document.getElementById("l2").innerText=TEXT[lang].aq;
+document.getElementById("l3").innerText=TEXT[lang].sq;
+document.getElementById("l4").innerText=TEXT[lang].sp;
+document.getElementById("l5").innerText=TEXT[lang].unit;
+document.getElementById("calcBtn").innerText=TEXT[lang].calc;
+document.getElementById("historyTitle").innerText=TEXT[lang].history;
+renderHistory();
+if(currentRecord) renderResult(currentRecord,false);
+}
+
+function toggleLang(){
+lang=lang==="th"?"en":"th";
+applyLanguage();
+}
+
+/* -------- ENTER ไปช่องถัดไป -------- */
+
+const inputs=["product","aq","sq","sp","unit"];
+inputs.forEach((id,index)=>{
+document.getElementById(id).addEventListener("keydown",function(e){
+if(e.key==="Enter"){
+e.preventDefault();
+if(index<inputs.length-1){
+document.getElementById(inputs[index+1]).focus();
+}else{
+calculate();
+}
+}
+});
+});
+
+/* -------- คำนวณ -------- */
+
+function calculate(){
+
+const p=product.value;
+const aqVal=parseFloat(aq.value);
+const sqVal=parseFloat(sq.value);
+const spVal=parseFloat(sp.value);
+
+if(!p||isNaN(aqVal)||isNaN(sqVal)||isNaN(spVal)) return;
+
+const mqv=(aqVal-sqVal)*spVal;
+const key=p+"-"+aqVal+"-"+sqVal+"-"+spVal;
+
+const record={p,aq:aqVal,sq:sqVal,sp:spVal,mqv};
+currentRecord=record;
+
+renderResult(record);
+
+if(key!==lastKey){
+historyData.push(record);
+lastKey=key;
+renderHistory();
+}
+}
+
+/* -------- วิเคราะห์แบบไม่ซ้ำ -------- */
+
+function generateAnalysis(record){
+
+analysisIndex++;
+const {p,aq,sq,mqv}=record;
+const diffPercent=((aq-sq)/sq)*100;
+let absPercent=Math.abs(diffPercent).toFixed(2);
+
+if(mqv>0){
+if(analysisIndex%2===0){
+return `ผลิตภัณฑ์ ${p} ใช้วัตถุดิบเกินมาตรฐาน ${absPercent}% ซึ่งสะท้อนถึงความเสี่ยงด้านประสิทธิภาพกระบวนการ อาจเกี่ยวข้องกับการควบคุมของเสียไม่ละเอียด ความผันผวนของคุณภาพวัตถุดิบ หรือมาตรฐานที่ไม่สอดคล้องกับสภาพการผลิตจริง ควรดำเนินการตรวจสอบเชิงลึก วิเคราะห์จุดสูญเสีย และทบทวนมาตรฐานเพื่อป้องกันต้นทุนสะสมในระยะยาว`;
+}else{
+return `การเบี่ยงเบนของ ${p} จำนวน ${absPercent}% แสดงถึงการใช้ทรัพยากรเกินแผนที่กำหนด อาจเกิดจากปัจจัยด้านแรงงาน เครื่องจักร หรือการตั้งค่ากระบวนการที่ไม่เสถียร การประเมินแนวโน้มย้อนหลังและการปรับปรุงขั้นตอนการทำงานจะช่วยลดความเสี่ยงด้านต้นทุนในอนาคต`;
+}
+}else{
+if(analysisIndex%2===0){
+return `ผลิตภัณฑ์ ${p} ใช้วัตถุดิบต่ำกว่ามาตรฐาน ${absPercent}% แสดงถึงการควบคุมการผลิตที่มีประสิทธิภาพและการลดของเสียอย่างเป็นระบบ ควรวิเคราะห์ปัจจัยความสำเร็จเพื่อถ่ายทอดแนวปฏิบัติที่ดีไปยังผลิตภัณฑ์อื่น`;
+}else{
+return `การเบี่ยงเบนเชิงบวกของ ${p} จำนวน ${absPercent}% สะท้อนถึงการบริหารทรัพยากรที่ดีขึ้นและความเสถียรของกระบวนการผลิต การติดตามผลอย่างต่อเนื่องจะช่วยรักษาระดับประสิทธิภาพนี้ในระยะยาว`;
+}
+}
+}
+
+/* -------- แสดงผล -------- */
+
+function renderResult(record){
+
+const {aq,sq,sp,mqv}=record;
+
+output.innerHTML=`
+AQ = ${aq}<br>
+SQ = ${sq}<br>
+SP = ${sp}<br><br>
+(AQ - SQ) × SP = <b>${mqv.toFixed(2)}</b><br><br>
+${generateAnalysis(record)}
+`;
+
+if(chart) chart.destroy();
+chart=new Chart(document.getElementById("chart"),{
+type:'bar',
+data:{
+labels:['AQ','SQ'],
+datasets:[{data:[aq,sq],backgroundColor:['#007acc','#99ccff']}]
+}
+});
+}
+
+/* -------- ประวัติ -------- */
+
+function renderHistory(){
+let table=document.getElementById("historyTable");
+table.innerHTML="";
+let header=table.insertRow();
+TEXT[lang].headers.forEach(h=>{
+let cell=header.insertCell();
+cell.innerText=h;
+});
+historyData.forEach(r=>{
+let row=table.insertRow();
+row.insertCell().innerText=r.p;
+row.insertCell().innerText=r.aq;
+row.insertCell().innerText=r.sq;
+row.insertCell().innerText=r.sp;
+row.insertCell().innerText=r.mqv.toFixed(2);
+let btnCell=row.insertCell();
+let btn=document.createElement("button");
+btn.className="view-btn";
+btn.innerText=TEXT[lang].headers[5];
+btn.onclick=function(){
+currentRecord=r;
+renderResult(r);
+};
+btnCell.appendChild(btn);
+});
+}
+
+applyLanguage();
+
+</script>
+</body>
+</html>
