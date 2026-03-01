@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MQV Smart AI</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body{font-family:Arial;background:#f0f8ff;padding:20px;}
+.container{max-width:900px;margin:auto;background:white;padding:25px;border-radius:12px;box-shadow:0 0 12px rgba(0,0,0,0.1);}
+h2{text-align:center;color:#007acc;}
+input,button{width:100%;padding:8px;margin:6px 0;}
+button{background:#007acc;color:white;border:none;border-radius:6px;cursor:pointer;}
+.status-good{color:green;font-weight:bold;}
+.status-bad{color:red;font-weight:bold;}
+.lang-btn{float:right;width:auto;}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<button class="lang-btn" onclick="toggleLang()">EN / ไทย</button>
+<h2 id="title"></h2>
+
+<label id="l1"></label>
+<input type="text" id="product">
+
+<label id="l2"></label>
+<input type="number" id="aq">
+
+<label id="l3"></label>
+<input type="number" id="sq">
+
+<label id="l4"></label>
+<input type="number" id="sp">
+
+<button onclick="calculate()" id="calcBtn"></button>
+
+<div id="output"></div>
+<canvas id="chart"></canvas>
+
+</div>
+
+<script>
+
+let lang="th";
+let lastKey=null;          // เก็บค่าตัวเลขล่าสุด
+let lastAnalysisText="";   // เก็บคำอธิบายล่าสุด
+let chart;
+
+const TEXT={
+th:{
+title:"การวิเคราะห์ส่วนต่างปริมาณวัตถุดิบ (MQV)",
+product:"ชื่อผลิตภัณฑ์",
+aq:"ปริมาณจริง (AQ)",
+sq:"ปริมาณมาตรฐาน (SQ)",
+sp:"ราคามาตรฐาน (SP)",
+calc:"คำนวณ",
+good:"พอใจ",
+bad:"ไม่พอใจ"
+},
+en:{
+title:"Material Quantity Variance (MQV)",
+product:"Product",
+aq:"Actual Quantity (AQ)",
+sq:"Standard Quantity (SQ)",
+sp:"Standard Price (SP)",
+calc:"Calculate",
+good:"Favorable",
+bad:"Unfavorable"
+}
+};
+
+function applyLanguage(){
+title.innerText=TEXT[lang].title;
+l1.innerText=TEXT[lang].product;
+l2.innerText=TEXT[lang].aq;
+l3.innerText=TEXT[lang].sq;
+l4.innerText=TEXT[lang].sp;
+calcBtn.innerText=TEXT[lang].calc;
+}
+
+function toggleLang(){
+lang=lang==="th"?"en":"th";
+applyLanguage();
+}
+
+/* ENTER */
+["product","aq","sq","sp"].forEach((id,i,arr)=>{
+document.getElementById(id).addEventListener("keydown",function(e){
+if(e.key==="Enter"){
+e.preventDefault();
+if(i<arr.length-1){
+document.getElementById(arr[i+1]).focus();
+}else{
+calculate();
+}
+}
+});
+});
+
+function calculate(){
+
+const p=product.value.trim();
+const aqVal=parseFloat(aq.value);
+const sqVal=parseFloat(sq.value);
+const spVal=parseFloat(sp.value);
+
+if(!p||isNaN(aqVal)||isNaN(sqVal)||isNaN(spVal)) return;
+
+const key=p+"-"+aqVal+"-"+sqVal+"-"+spVal;
+const mqv=(aqVal-sqVal)*spVal;
+
+/* 🔥 เปลี่ยนคำอธิบายเฉพาะเมื่อเลขเปลี่ยน */
+if(key!==lastKey){
+lastKey=key;
+lastAnalysisText=generateAnalysis({p,aq:aqVal,sq:sqVal,mqv});
+}
+
+renderResult({p,aq:aqVal,sq:sqVal,sp:spVal,mqv});
+}
+
+function generateAnalysis(record){
+
+const {p,aq,sq,mqv}=record;
+const percent=sq!==0?((aq-sq)/sq)*100:0;
+const absPercent=Math.abs(percent).toFixed(2);
+
+const badTextsTH=[
+`ผลิตภัณฑ์ ${p} ใช้วัตถุดิบสูงกว่ามาตรฐาน ${absPercent}% สะท้อนถึงการควบคุมต้นทุนที่ยังไม่มีประสิทธิภาพ`,
+`${p} มีความเบี่ยงเบนเชิงลบ ${absPercent}% ซึ่งอาจเกิดจากของเสียหรือความคลาดเคลื่อนของกระบวนการ`,
+`การใช้วัตถุดิบของ ${p} สูงเกิน ${absPercent}% อาจส่งผลกระทบต่อกำไรขั้นต้น`
+];
+
+const goodTextsTH=[
+`ผลิตภัณฑ์ ${p} ใช้วัตถุดิบต่ำกว่ามาตรฐาน ${absPercent}% แสดงถึงการควบคุมกระบวนการที่มีประสิทธิภาพ`,
+`${p} มีความเบี่ยงเบนเชิงบวก ${absPercent}% สะท้อนถึงการบริหารทรัพยากรอย่างเหมาะสม`,
+`การดำเนินงานของ ${p} มีประสิทธิผล ใช้วัตถุดิบต่ำกว่าที่กำหนด ${absPercent}%`
+];
+
+if(mqv>0){
+let i=Math.floor(Math.random()*badTextsTH.length);
+return `<span class="status-bad">${TEXT[lang].bad}</span><br><br>${badTextsTH[i]}`;
+}
+else if(mqv<0){
+let i=Math.floor(Math.random()*goodTextsTH.length);
+return `<span class="status-good">${TEXT[lang].good}</span><br><br>${goodTextsTH[i]}`;
+}
+else{
+return `<span class="status-good">${TEXT[lang].good}</span><br><br>การใช้วัตถุดิบเป็นไปตามมาตรฐาน`;
+}
+
+}
+
+function renderResult(record){
+
+output.innerHTML=`
+AQ = ${record.aq}<br>
+SQ = ${record.sq}<br>
+SP = ${record.sp}<br><br>
+(AQ - SQ) × SP = <b>${record.mqv.toFixed(2)}</b><br><br>
+${lastAnalysisText}
+`;
+
+if(chart) chart.destroy();
+chart=new Chart(document.getElementById("chart"),{
+type:'bar',
+data:{
+labels:['AQ','SQ'],
+datasets:[{data:[record.aq,record.sq]}]
+}
+});
+}
+
+applyLanguage();
+
+</script>
+</body>
+</html>
