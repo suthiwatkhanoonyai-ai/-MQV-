@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MQV Calculator</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body{
+    font-family: Arial, sans-serif;
+    background:#f0f8ff;
+    margin:0;
+    padding:20px;
+}
+.container{
+    max-width:1000px;
+    margin:auto;
+    background:white;
+    padding:25px;
+    border-radius:12px;
+    box-shadow:0 0 10px rgba(0,0,0,0.1);
+}
+h2{
+    text-align:center;
+    color:#007acc;
+}
+button{
+    background:#007acc;
+    color:white;
+    border:none;
+    padding:8px;
+    margin:5px 0;
+    cursor:pointer;
+}
+button:hover{
+    background:#005f99;
+}
+input{
+    width:100%;
+    padding:8px;
+    margin:6px 0 15px 0;
+}
+.lang-btn{
+    float:right;
+}
+.result, .history{
+    background:#e6f2ff;
+    padding:15px;
+    border-radius:10px;
+    margin-top:15px;
+}
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+th, td{
+    border:1px solid #ccc;
+    padding:6px;
+    text-align:center;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+<button class="lang-btn" onclick="toggleLanguage()">EN / ไทย</button>
+<h2 id="title">การคำนวณส่วนต่างปริมาณวัตถุดิบ (MQV)</h2>
+
+<label id="l1">ชื่อผลิตภัณฑ์</label>
+<input type="text" id="product">
+
+<label id="l2">ปริมาณจริงที่ใช้ (AQ)</label>
+<input type="number" id="aq">
+
+<label id="l3">ปริมาณมาตรฐาน (SQ)</label>
+<input type="number" id="sq">
+
+<label id="l4">ราคามาตรฐาน (SP)</label>
+<input type="number" id="sp">
+
+<label id="l5">หน่วยนับ</label>
+<input type="text" id="unit">
+
+<button onclick="calculate()" id="calcBtn">คำนวณ</button>
+<button onclick="exportPDF()">Export PDF</button>
+<button onclick="exportExcel()">Export Excel</button>
+
+<div class="result" id="output"></div>
+<canvas id="chart"></canvas>
+
+<div class="history">
+<h3>ประวัติการคำนวณ</h3>
+<table id="historyTable">
+<tr><th>Product</th><th>AQ</th><th>SQ</th><th>SP</th><th>MQV</th></tr>
+</table>
+</div>
+
+</div>
+
+<script>
+let chart;
+let language = "th";
+
+function toggleLanguage(){
+    language = language === "th" ? "en" : "th";
+
+    document.getElementById("title").innerText = language==="th" ?
+    "การคำนวณส่วนต่างปริมาณวัตถุดิบ (MQV)" :
+    "Material Quantity Variance (MQV) Calculator";
+
+    document.getElementById("l1").innerText = language==="th"?"ชื่อผลิตภัณฑ์":"Product Name";
+    document.getElementById("l2").innerText = language==="th"?"ปริมาณจริงที่ใช้ (AQ)":"Actual Quantity (AQ)";
+    document.getElementById("l3").innerText = language==="th"?"ปริมาณมาตรฐาน (SQ)":"Standard Quantity (SQ)";
+    document.getElementById("l4").innerText = language==="th"?"ราคามาตรฐาน (SP)":"Standard Price (SP)";
+    document.getElementById("l5").innerText = language==="th"?"หน่วยนับ":"Unit";
+    document.getElementById("calcBtn").innerText = language==="th"?"คำนวณ":"Calculate";
+}
+
+function calculate(){
+    const product = document.getElementById("product").value;
+    const aq = parseFloat(document.getElementById("aq").value);
+    const sq = parseFloat(document.getElementById("sq").value);
+    const sp = parseFloat(document.getElementById("sp").value);
+    const unit = document.getElementById("unit").value;
+
+    const mqv = (aq - sq) * sp;
+
+    let status = mqv>0?"Unfavorable":"Favorable";
+    let detail = `
+    สูตร: (AQ - SQ) × SP <br>
+    = (${aq} - ${sq}) × ${sp} <br>
+    = <b>${mqv.toFixed(2)}</b> <br><br>
+
+    วิเคราะห์เชิงลึก:<br>
+    1) หากค่าเป็นบวก แสดงว่าการใช้วัตถุดิบเกินมาตรฐาน ส่งผลให้ต้นทุนสูงขึ้น<br>
+    2) อาจเกิดจากของเสียสูง กระบวนการผลิตไม่มีประสิทธิภาพ วัตถุดิบคุณภาพต่ำ หรือแรงงานขาดทักษะ<br>
+    3) หากค่าเป็นลบ แสดงถึงการใช้วัตถุดิบต่ำกว่ามาตรฐาน อาจเกิดจากการควบคุมที่ดีหรือมาตรฐานตั้งไว้สูงเกินจริง<br><br>
+
+    คำแนะนำ:<br>
+    - ตรวจสอบอัตราของเสีย (Waste Rate)<br>
+    - วิเคราะห์ประสิทธิภาพเครื่องจักร<br>
+    - ฝึกอบรมพนักงาน<br>
+    - ทบทวนการกำหนด Standard Quantity<br><br>
+
+    ตัวอย่าง (${product}):<br>
+    หากปรับ AQ ให้เท่ากับ SQ จะทำให้ MQV = 0 แสดงว่าควบคุมต้นทุนได้ตามแผน
+    `;
+
+    document.getElementById("output").innerHTML = detail;
+
+    saveHistory(product,aq,sq,sp,mqv);
+
+    if(chart) chart.destroy();
+    chart = new Chart(document.getElementById("chart"),{
+        type:'bar',
+        data:{
+            labels:['AQ','SQ'],
+            datasets:[{
+                label:'Quantity Comparison',
+                data:[aq,sq],
+                backgroundColor:['#007acc','#99ccff']
+            }]
+        }
+    });
+}
+
+function saveHistory(p,aq,sq,sp,mqv){
+    let table = document.getElementById("historyTable");
+    let row = table.insertRow();
+    row.insertCell(0).innerText=p;
+    row.insertCell(1).innerText=aq;
+    row.insertCell(2).innerText=sq;
+    row.insertCell(3).innerText=sp;
+    row.insertCell(4).innerText=mqv.toFixed(2);
+}
+
+function exportPDF(){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.text(document.getElementById("output").innerText,10,10);
+    doc.save("MQV_Result.pdf");
+}
+
+function exportExcel(){
+    let table = document.getElementById("historyTable");
+    let wb = XLSX.utils.table_to_book(table,{sheet:"MQV"});
+    XLSX.writeFile(wb,"MQV_History.xlsx");
+}
+</script>
+
+</body>
+</html>
