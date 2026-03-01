@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>MQV Calculator</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body{font-family:Arial;background:#f4f9ff;padding:20px}
+.container{background:white;padding:20px;border-radius:10px;max-width:800px;margin:auto}
+h1{color:#007acc}
+input,select,button{margin:5px;padding:8px}
+button{background:#007acc;color:white;border:none;border-radius:5px;cursor:pointer}
+#output{margin-top:20px}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1 id="title">การคำนวณส่วนต่างปริมาณวัตถุดิบ (MQV)</h1>
+
+<button onclick="changeLang('th')">ไทย</button>
+<button onclick="changeLang('en')">English</button>
+
+<br><br>
+
+<input id="product" placeholder="ชื่อผลิตภัณฑ์"><br>
+<input id="aq" type="number" placeholder="AQ"><br>
+<input id="sq" type="number" placeholder="SQ"><br>
+<input id="sp" type="number" placeholder="SP"><br>
+<input id="unit" placeholder="หน่วย"><br>
+
+<button onclick="calculate()">คำนวณ</button>
+<button onclick="exportExcel()">Export Excel</button>
+<button onclick="exportPDF()">Export PDF</button>
+
+<div id="output"></div>
+<canvas id="chart"></canvas>
+
+<h3>History</h3>
+<ul id="history"></ul>
+
+</div>
+
+<script>
+
+let lang="th";
+let chart;
+let historyData=[];
+let lastSaved="";
+
+function changeLang(l){
+lang=l;
+document.getElementById("title").innerText=
+lang==="th"
+?"การคำนวณส่วนต่างปริมาณวัตถุดิบ (MQV)"
+:"Material Quantity Variance (MQV)";
+}
+
+function calculate(){
+let p=document.getElementById("product").value;
+let aq=parseFloat(document.getElementById("aq").value)||0;
+let sq=parseFloat(document.getElementById("sq").value)||0;
+let sp=parseFloat(document.getElementById("sp").value)||0;
+
+let mqv=(aq-sq)*sp;
+
+let record={p,aq,sq,sp,mqv};
+renderResult(record,true);
+}
+
+function renderResult(record,save){
+
+const { p, aq, sq, sp, mqv } = record;
+const random = arr => arr[Math.floor(Math.random()*arr.length)];
+const abs = Math.abs(mqv).toFixed(2);
+
+const introTH=[
+"จากการวิเคราะห์ข้อมูลล่าสุด",
+"เมื่อประเมินตัวเลขการผลิต",
+"จากผลการคำนวณเชิงต้นทุน",
+"การตรวจสอบประสิทธิภาพพบว่า"
+];
+
+const introEN=[
+"Based on latest evaluation,",
+"Production data indicates that",
+"Cost analysis reveals that",
+"Management review shows that"
+];
+
+const recommendTH=[
+"ควรตรวจสอบกระบวนการผลิตอย่างละเอียด",
+"แนะนำให้วิเคราะห์อัตราการสูญเสีย",
+"ควรทบทวนมาตรฐานการใช้วัตถุดิบ",
+"ควรติดตามแนวโน้มอย่างต่อเนื่อง"
+];
+
+const recommendEN=[
+"Management should review production process carefully.",
+"Waste rate analysis is recommended.",
+"Standard quantity should be reassessed.",
+"Continuous monitoring is advised."
+];
+
+let analysis="";
+
+if(mqv>0){
+
+analysis=lang==="th"
+?random([
+`<b>${random(introTH)}</b> ${p} ใช้วัตถุดิบ ${aq} สูงกว่ามาตรฐาน ${sq} ทำให้เกิดต้นทุนส่วนเกิน ${mqv.toFixed(2)} บาท ${random(recommendTH)}`,
+`ผลิตภัณฑ์ ${p} มีความคลาดเคลื่อนเชิงลบ<br><br>
+- ใช้จริง: ${aq}<br>
+- มาตรฐาน: ${sq}<br>
+- ส่วนต่าง: ${mqv.toFixed(2)} บาท<br><br>
+${random(recommendTH)}`
+])
+:random([
+`<b>${random(introEN)}</b> Product ${p} used ${aq} exceeding ${sq}, resulting in extra cost ${mqv.toFixed(2)}. ${random(recommendEN)}`,
+`Unfavorable variance for ${p}.<br>
+Actual: ${aq}<br>
+Standard: ${sq}<br>
+Extra cost: ${mqv.toFixed(2)}<br>
+${random(recommendEN)}`
+]);
+
+}else if(mqv<0){
+
+analysis=lang==="th"
+?random([
+`<b>${random(introTH)}</b> ${p} ใช้วัตถุดิบต่ำกว่ามาตรฐาน ช่วยประหยัด ${abs} บาท ${random(recommendTH)}`,
+`ผลลัพธ์ของ ${p} อยู่ในระดับดี<br>
+ประหยัดได้ ${abs} บาท<br>
+ควรรักษามาตรฐานนี้ต่อไป`
+])
+:random([
+`<b>${random(introEN)}</b> Product ${p} saved ${abs} by using less material. ${random(recommendEN)}`,
+`Favorable variance achieved for ${p}. Savings: ${abs}. Maintain performance.`
+]);
+
+}else{
+analysis=lang==="th"
+?`การใช้วัตถุดิบของ ${p} เป็นไปตามมาตรฐาน`
+:`Material usage for ${p} aligns with standard.`;
+}
+
+let formula=`
+<b>${lang==="th"?"สูตร":"Formula"}:</b> (AQ - SQ) × SP<br>
+= (${aq} - ${sq}) × ${sp}<br>
+= <b>${mqv.toFixed(2)}</b><br><br>
+`;
+
+document.getElementById("output").innerHTML=formula+analysis;
+
+if(chart) chart.destroy();
+chart=new Chart(document.getElementById("chart"),{
+type:'bar',
+data:{
+labels:['AQ','SQ'],
+datasets:[{data:[aq,sq],backgroundColor:['#007acc','#99ccff']}]
+}
+});
+
+if(save){
+historyData.push(record);
+updateHistory();
+}
+
+}
+
+function updateHistory(){
+let ul=document.getElementById("history");
+ul.innerHTML="";
+historyData.forEach((h,i)=>{
+let li=document.createElement("li");
+li.innerText=h.p+" = "+h.mqv.toFixed(2);
+li.onclick=()=>renderResult(h,false);
+ul.appendChild(li);
+});
+}
+
+function exportExcel(){
+let ws=XLSX.utils.json_to_sheet(historyData);
+let wb=XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb,ws,"MQV");
+XLSX.writeFile(wb,"mqv.xlsx");
+}
+
+function exportPDF(){
+const { jsPDF } = window.jspdf;
+let doc=new jsPDF();
+doc.text(document.getElementById("output").innerText,10,10);
+doc.save("mqv.pdf");
+}
+
+</script>
+</body>
+</html>
