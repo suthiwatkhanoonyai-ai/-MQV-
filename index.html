@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>MQV Calculator</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body{font-family:Arial;background:#f4f9ff;padding:20px}
+.container{background:white;padding:20px;border-radius:10px;max-width:800px;margin:auto}
+h1{color:#007acc}
+input,select,button{margin:5px;padding:8px}
+button{background:#007acc;color:white;border:none;border-radius:5px;cursor:pointer}
+#output{margin-top:20px}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1 id="title">การคำนวณส่วนต่างปริมาณวัตถุดิบ (MQV)</h1>
+
+<button onclick="changeLang('th')">ไทย</button>
+<button onclick="changeLang('en')">English</button>
+
+<br><br>
+
+<input id="product" placeholder="ชื่อผลิตภัณฑ์"><br>
+<input id="aq" type="number" placeholder="AQ"><br>
+<input id="sq" type="number" placeholder="SQ"><br>
+<input id="sp" type="number" placeholder="SP"><br>
+<input id="unit" placeholder="หน่วย"><br>
+
+<button onclick="calculate()">คำนวณ</button>
+<button onclick="exportExcel()">Export Excel</button>
+<button onclick="exportPDF()">Export PDF</button>
+
+<div id="output"></div>
+<canvas id="chart"></canvas>
+
+<h3>History</h3>
+<ul id="history"></ul>
+
+</div>
+
+<script>
+
+let lang="th";
+let chart;
+let historyData=[];
+
+function changeLang(l){
+lang=l;
+document.getElementById("title").innerText=
+lang==="th"
+?"การคำนวณส่วนต่างปริมาณวัตถุดิบ (MQV)"
+:"Material Quantity Variance (MQV)";
+}
+
+function calculate(){
+let p=document.getElementById("product").value;
+let aq=parseFloat(document.getElementById("aq").value)||0;
+let sq=parseFloat(document.getElementById("sq").value)||0;
+let sp=parseFloat(document.getElementById("sp").value)||0;
+
+let mqv=(aq-sq)*sp;
+let record={p,aq,sq,sp,mqv};
+renderResult(record,true);
+}
+
+function generateLongAnalysis(p,aq,sq,mqv){
+
+const random=a=>a[Math.floor(Math.random()*a.length)];
+const percent=((Math.abs(aq-sq)/(sq||1))*100).toFixed(2);
+
+const causeTH=[
+`ความคลาดเคลื่อนดังกล่าวอาจเกิดจากความไม่สม่ำเสมอของกระบวนการผลิต 
+การสูญเสียวัตถุดิบระหว่างขั้นตอนการทำงาน หรือการกำหนดมาตรฐานที่ไม่สอดคล้องกับสภาพการผลิตจริง 
+นอกจากนี้ยังอาจเกี่ยวข้องกับคุณภาพวัตถุดิบที่แตกต่างกันในแต่ละรอบการผลิต`,
+
+`อีกปัจจัยหนึ่งที่ควรพิจารณาคือประสิทธิภาพของเครื่องจักรและแรงงาน 
+หากมีการตั้งค่าที่ไม่เหมาะสมหรือขาดการควบคุมคุณภาพอย่างใกล้ชิด 
+อาจทำให้เกิดการใช้วัตถุดิบเกินหรือขาดจากมาตรฐานที่วางไว้`
+];
+
+const recommendTH=[
+`องค์กรควรดำเนินการวิเคราะห์เชิงลึกในระดับกระบวนการ 
+ตรวจสอบอัตราการสูญเสีย และจัดทำรายงานแนวโน้มย้อนหลัง 
+เพื่อระบุรูปแบบความผิดปกติอย่างเป็นระบบ`,
+
+`ควรมีการทบทวนมาตรฐานปริมาณวัตถุดิบให้สอดคล้องกับสภาพการผลิตจริง 
+รวมถึงเสริมสร้างการควบคุมภายในในจุดเสี่ยงที่สำคัญ 
+และติดตามผลอย่างต่อเนื่อง`
+];
+
+const causeEN=[
+`The variance may be caused by unstable production processes, 
+unexpected material waste, or inconsistent raw material quality. 
+It may also reflect unrealistic standard quantity settings.`,
+
+`Another contributing factor could be machine calibration issues 
+or workforce performance variability during production cycles.`
+];
+
+const recommendEN=[
+`Management should perform detailed root cause analysis 
+and evaluate waste rate trends over time.`,
+
+`Reassessment of standard quantity and strengthening internal controls 
+within critical production stages is strongly recommended.`
+];
+
+if(mqv>0){
+return lang==="th"
+? `<br><br><b>สาเหตุที่เป็นไปได้:</b><br>${random(causeTH)}
+<br><br><b>ข้อเสนอแนะ:</b><br>${random(recommendTH)}
+<br><br>ระดับความคลาดเคลื่อนประมาณ ${percent}% จากมาตรฐาน`
+: `<br><br><b>Possible Causes:</b><br>${random(causeEN)}
+<br><br><b>Recommendations:</b><br>${random(recommendEN)}
+<br><br>Variance magnitude is approximately ${percent}% of standard.`;
+}
+
+if(mqv<0){
+return lang==="th"
+? `<br><br><b>การวิเคราะห์เชิงบวก:</b><br>
+การควบคุมกระบวนการผลิตอยู่ในระดับที่ดี 
+แต่ควรตรวจสอบให้แน่ใจว่าไม่กระทบต่อคุณภาพสินค้า
+<br><br><b>ข้อเสนอแนะ:</b><br>${random(recommendTH)}`
+: `<br><br><b>Positive Performance Analysis:</b><br>
+Material efficiency is strong, but quality impact should be reviewed.
+<br><br><b>Recommendation:</b><br>${random(recommendEN)}`;
+}
+
+return "";
+}
+
+function renderResult(record,save){
+
+const {p,aq,sq,sp,mqv}=record;
+
+let formula=`
+<b>${lang==="th"?"สูตร":"Formula"}:</b> (AQ - SQ) × SP<br>
+= (${aq} - ${sq}) × ${sp}<br>
+= <b>${mqv.toFixed(2)}</b><br>
+`;
+
+document.getElementById("output").innerHTML=
+formula + generateLongAnalysis(p,aq,sq,mqv);
+
+if(chart) chart.destroy();
+chart=new Chart(document.getElementById("chart"),{
+type:'bar',
+data:{
+labels:['AQ','SQ'],
+datasets:[{data:[aq,sq],backgroundColor:['#007acc','#99ccff']}]
+}
+});
+
+if(save){
+historyData.push(record);
+updateHistory();
+}
+
+}
+
+function updateHistory(){
+let ul=document.getElementById("history");
+ul.innerHTML="";
+historyData.forEach((h,i)=>{
+let li=document.createElement("li");
+li.innerText=h.p+" = "+h.mqv.toFixed(2);
+li.onclick=()=>renderResult(h,false);
+ul.appendChild(li);
+});
+}
+
+function exportExcel(){
+let ws=XLSX.utils.json_to_sheet(historyData);
+let wb=XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb,ws,"MQV");
+XLSX.writeFile(wb,"mqv.xlsx");
+}
+
+function exportPDF(){
+const { jsPDF } = window.jspdf;
+let doc=new jsPDF();
+doc.text(document.getElementById("output").innerText,10,10);
+doc.save("mqv.pdf");
+}
+
+</script>
+</body>
+</html>
