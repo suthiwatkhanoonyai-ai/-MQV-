@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MQV Calculator</title>
+
+<style>
+body{
+font-family: Arial;
+background:#f4f9ff;
+padding:20px;
+}
+
+.container{
+max-width:700px;
+margin:auto;
+background:white;
+padding:25px;
+border-radius:10px;
+box-shadow:0 0 10px rgba(0,0,0,0.1);
+}
+
+h2{
+text-align:center;
+color:#007bff;
+}
+
+input{
+width:100%;
+padding:10px;
+margin:8px 0;
+border-radius:6px;
+border:1px solid #ccc;
+}
+
+button{
+width:100%;
+padding:12px;
+margin-top:10px;
+border:none;
+border-radius:6px;
+background:#007bff;
+color:white;
+font-size:16px;
+cursor:pointer;
+}
+
+button:hover{
+background:#0056b3;
+}
+
+.result{
+margin-top:20px;
+padding:15px;
+background:#eef5ff;
+border-radius:8px;
+}
+
+.history{
+margin-top:20px;
+font-size:14px;
+background:#f9f9f9;
+padding:10px;
+border-radius:8px;
+max-height:200px;
+overflow:auto;
+}
+
+.lang{
+float:right;
+margin-bottom:10px;
+cursor:pointer;
+color:#007bff;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="lang" onclick="toggleLang()">EN / TH</div>
+
+<h2 id="title">การคำนวณส่วนต่างปริมาณวัตถุดิบ (MQV)</h2>
+
+<input type="text" id="product" placeholder="ชื่อผลิตภัณฑ์">
+<input type="number" id="aq" placeholder="ปริมาณจริง (AQ)">
+<input type="number" id="sq" placeholder="ปริมาณมาตรฐาน (SQ)">
+<input type="number" id="price" placeholder="ราคามาตรฐานต่อหน่วย">
+
+<button onclick="calculate()" id="calcBtn">คำนวณ</button>
+
+<div class="result" id="result"></div>
+
+<div class="history" id="history"></div>
+
+</div>
+
+<script>
+
+let lang="th";
+let lastData="";
+
+const text={
+th:{
+title:"การคำนวณส่วนต่างปริมาณวัตถุดิบ (MQV)",
+product:"ชื่อผลิตภัณฑ์",
+aq:"ปริมาณจริง (AQ)",
+sq:"ปริมาณมาตรฐาน (SQ)",
+price:"ราคามาตรฐานต่อหน่วย",
+btn:"คำนวณ",
+satisfied:"ผลลัพธ์อยู่ในเกณฑ์ที่น่าพอใจ",
+unsatisfied:"ผลลัพธ์ยังไม่เป็นที่น่าพอใจ"
+},
+en:{
+title:"Material Quantity Variance (MQV)",
+product:"Product Name",
+aq:"Actual Quantity (AQ)",
+sq:"Standard Quantity (SQ)",
+price:"Standard Price per Unit",
+btn:"Calculate",
+satisfied:"The result is satisfactory",
+unsatisfied:"The result is unsatisfactory"
+}
+};
+
+function toggleLang(){
+lang = lang==="th" ? "en" : "th";
+updateLanguage();
+}
+
+function updateLanguage(){
+document.getElementById("title").innerText=text[lang].title;
+document.getElementById("product").placeholder=text[lang].product;
+document.getElementById("aq").placeholder=text[lang].aq;
+document.getElementById("sq").placeholder=text[lang].sq;
+document.getElementById("price").placeholder=text[lang].price;
+document.getElementById("calcBtn").innerText=text[lang].btn;
+}
+
+function calculate(){
+
+let product=document.getElementById("product").value;
+let aq=parseFloat(document.getElementById("aq").value);
+let sq=parseFloat(document.getElementById("sq").value);
+let price=parseFloat(document.getElementById("price").value);
+
+if(isNaN(aq)||isNaN(sq)||isNaN(price)) return;
+
+let key=product+aq+sq+price;
+
+if(key===lastData) return;
+
+lastData=key;
+
+let mqv=(aq-sq)*price;
+
+let status="";
+let analysis="";
+let advice="";
+
+if(mqv<=0){
+
+status="<b style='color:green;'>"+text[lang].satisfied+"</b>";
+
+analysis="ปริมาณการใช้วัตถุดิบจริงต่ำกว่าหรือเท่ากับมาตรฐาน แสดงให้เห็นว่ากระบวนการผลิตมีประสิทธิภาพ การควบคุมต้นทุนอยู่ในระดับที่เหมาะสม ไม่มีการสูญเสียวัตถุดิบเกินจำเป็น การดำเนินงานสะท้อนถึงการวางแผนที่แม่นยำและการใช้ทรัพยากรอย่างคุ้มค่า";
+
+advice="ควรรักษามาตรฐานการทำงานในปัจจุบันไว้ พร้อมติดตามผลอย่างต่อเนื่อง วิเคราะห์แนวโน้มระยะยาว และพัฒนาปรับปรุงกระบวนการเพื่อเพิ่มประสิทธิภาพให้ดียิ่งขึ้น รวมถึงกำหนดตัวชี้วัดเพื่อป้องกันความเสี่ยงในอนาคต";
+
+}else{
+
+status="<b style='color:red;'>"+text[lang].unsatisfied+"</b>";
+
+analysis="ปริมาณวัตถุดิบที่ใช้จริงสูงกว่ามาตรฐานที่กำหนด สะท้อนถึงการสูญเสียหรือการควบคุมกระบวนการผลิตที่ยังไม่มีประสิทธิภาพเพียงพอ อาจเกิดจากความผิดพลาดในการวางแผน การควบคุมคุณภาพที่ไม่รัดกุม หรือการใช้ทรัพยากรเกินความจำเป็น ส่งผลให้ต้นทุนการผลิตสูงขึ้น";
+
+advice="ควรวิเคราะห์ขั้นตอนการผลิตอย่างละเอียด ตรวจสอบจุดที่ทำให้เกิดของเสียหรือความคลาดเคลื่อน ปรับปรุงการควบคุมคุณภาพ พัฒนาทักษะพนักงาน และทบทวนมาตรฐานการใช้วัตถุดิบให้สอดคล้องกับสภาพการทำงานจริง เพื่อควบคุมต้นทุนให้มีประสิทธิภาพมากขึ้น";
+
+}
+
+document.getElementById("result").innerHTML=
+"MQV = "+mqv.toFixed(2)+"<br><br>"+status+
+"<br><br><b>วิเคราะห์สาเหตุ:</b><br>"+analysis+
+"<br><br><b>คำแนะนำ:</b><br>"+advice;
+
+let history=document.getElementById("history");
+history.innerHTML+="<div>"+product+" = "+mqv.toFixed(2)+"</div>";
+
+}
+
+let inputs=document.querySelectorAll("input");
+
+inputs.forEach((input,index)=>{
+input.addEventListener("keydown",function(e){
+if(e.key==="Enter"){
+e.preventDefault();
+if(index<inputs.length-1){
+inputs[index+1].focus();
+}else{
+calculate();
+}
+}
+});
+});
+
+</script>
+
+</body>
+</html>
