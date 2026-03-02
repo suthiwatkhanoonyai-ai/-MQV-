@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MQV Expert Analysis System</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+    :root {
+        --primary-color: #005f99;
+        --secondary-color: #e6f2ff;
+        --success-color: #2e7d32;
+        --danger-color: #d32f2f;
+    }
+    body { font-family: 'Sarabun', sans-serif; background: #f0f4f8; margin: 0; padding: 20px; color: #333; }
+    .container { max-width: 1000px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+    h2 { text-align: center; color: var(--primary-color); border-bottom: 2px solid var(--secondary-color); padding-bottom: 15px; }
+    .input-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+    @media (max-width: 600px) { .input-group { grid-template-columns: 1fr; } }
+    label { font-weight: bold; font-size: 0.9em; color: #555; }
+    input { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+    button { width: 100%; padding: 12px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; transition: 0.3s; margin-top: 10px; }
+    button:hover { background: #004066; }
+    .lang-btn { width: auto; float: right; background: #666; margin-bottom: 10px; }
+    
+    .result-section { background: var(--secondary-color); padding: 25px; border-radius: 12px; margin-top: 25px; display: none; line-height: 1.6; }
+    .analysis-card { background: white; padding: 20px; border-radius: 8px; border-left: 5px solid var(--primary-color); margin-top: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    .status-badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-weight: bold; margin-bottom: 10px; }
+    .status-bad { background: #ffebee; color: var(--danger-color); }
+    .status-good { background: #e8f5e9; color: var(--success-color); }
+    
+    canvas { margin-top: 20px; max-height: 350px; }
+    .history-section { margin-top: 40px; }
+    table { width: 100%; border-collapse: collapse; background: white; font-size: 0.9em; }
+    th, td { border: 1px solid #eee; padding: 12px; text-align: center; }
+    th { background: var(--primary-color); color: white; }
+    .view-btn { background: #008ba3; padding: 5px 10px; font-size: 0.8em; width: auto; margin: 0; }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <button class="lang-btn" onclick="toggleLang()">TH / EN</button>
+    <h2 id="title">ระบบวิเคราะห์ต้นทุน MQV</h2>
+
+    <div class="input-group">
+        <div><label id="l1"></label><input type="text" id="product"></div>
+        <div><label id="l5"></label><input type="text" id="unit"></div>
+        <div><label id="l2"></label><input type="number" id="aq"></div>
+        <div><label id="l3"></label><input type="number" id="sq"></div>
+        <div><label id="l4"></label><input type="number" id="sp"></div>
+    </div>
+
+    <button onclick="calculate()" id="calcBtn">คำนวณผลลัพธ์</button>
+
+    <div class="result-section" id="output">
+        </div>
+    
+    <canvas id="chart"></canvas>
+
+    <div class="history-section">
+        <h3 id="historyTitle">ประวัติการวิเคราะห์</h3>
+        <div style="overflow-x: auto;">
+            <table id="historyTable"></table>
+        </div>
+    </div>
+</div>
+
+<script>
+let chart;
+let lang = "th";
+let historyData = [];
+
+const TEXT = {
+    th: {
+        title: "การวิเคราะห์ส่วนต่างปริมาณวัตถุดิบ (MQV)",
+        product: "ชื่อผลิตภัณฑ์", aq: "ปริมาณที่ใช้จริง (AQ)", sq: "ปริมาณมาตรฐาน (SQ)", sp: "ราคามาตรฐานต่อหน่วย (SP)", unit: "หน่วยนับ",
+        calc: "วิเคราะห์ข้อมูลประมวลผล", history: "ประวัติการคำนวณ", headers: ["สินค้า", "จริง", "มาตรฐาน", "ราคา", "ส่วนต่าง", "เรียกดู"],
+        satisfy: "ประหยัดต้นทุน (Favorable)", unsatisfy: "ต้นทุนเกินกำหนด (Unfavorable)"
+    },
+    en: {
+        title: "Material Quantity Variance Analysis",
+        product: "Product Name", aq: "Actual Quantity (AQ)", sq: "Standard Quantity (SQ)", sp: "Standard Price (SP)", unit: "Unit",
+        calc: "Process Analysis", history: "Calculation History", headers: ["Product", "Actual", "Std", "Price", "Variance", "View"],
+        satisfy: "Favorable Variance", unsatisfy: "Unfavorable Variance"
+    }
+};
+
+function applyLanguage() {
+    document.getElementById("title").innerText = TEXT[lang].title;
+    document.getElementById("l1").innerText = TEXT[lang].product;
+    document.getElementById("l2").innerText = TEXT[lang].aq;
+    document.getElementById("l3").innerText = TEXT[lang].sq;
+    document.getElementById("l4").innerText = TEXT[lang].sp;
+    document.getElementById("l5").innerText = TEXT[lang].unit;
+    document.getElementById("calcBtn").innerText = TEXT[lang].calc;
+    document.getElementById("historyTitle").innerText = TEXT[lang].history;
+    renderHistory();
+}
+
+function toggleLang() {
+    lang = lang === "th" ? "en" : "th";
+    applyLanguage();
+}
+
+function calculate() {
+    const p = document.getElementById("product").value;
+    const aqVal = parseFloat(document.getElementById("aq").value);
+    const sqVal = parseFloat(document.getElementById("sq").value);
+    const spVal = parseFloat(document.getElementById("sp").value);
+    const unitVal = document.getElementById("unit").value || "หน่วย";
+
+    if(!p || isNaN(aqVal) || isNaN(sqVal) || isNaN(spVal)) return;
+
+    const mqv = (aqVal - sqVal) * spVal;
+    const record = { p, aq: aqVal, sq: sqVal, sp: spVal, mqv, unit: unitVal };
+    
+    historyData.push(record);
+    renderResult(record);
+    renderHistory();
+}
+
+function generateDetailedAnalysis(record) {
+    const { p, aq, sq, mqv, unit, sp } = record;
+    const diff = Math.abs(aq - sq).toFixed(2);
+    const percent = sq !== 0 ? ((Math.abs(aq - sq) / sq) * 100).toFixed(2) : 0;
+    const mqvFormatted = Math.abs(mqv).toLocaleString(undefined, {minimumFractionDigits: 2});
+
+    if (mqv > 0) {
+        return lang === "th" ? `
+            <div class="status-badge status-bad">⚠️ ต้นทุนสูงกว่ามาตรฐาน (Unfavorable)</div>
+            <div class="analysis-card">
+                <b>1. บทสรุปการทำงาน:</b> พบว่าผลิตภัณฑ์ <b>"${p}"</b> มีการใช้วัตถุดิบจริงสูงกว่าที่กำหนดไว้ในมาตรฐานถึง <b>${diff} ${unit}</b> หรือคิดเป็นการเบี่ยงเบนทางลบ <b>${percent}%</b><br><br>
+                <b>2. ผลกระทบด้านการเงิน:</b> ความล่าช้าหรือความสูญเสียในการผลิตครั้งนี้ส่งผลให้เกิดต้นทุนส่วนเกิน (Waste Cost) เป็นจำนวนเงิน <b>${mqvFormatted} บาท</b> ซึ่งจะกระทบโดยตรงต่ออัตรากำไรขั้นต้น (Gross Profit Margin)<br><br>
+                <b>3. การวิเคราะห์สาเหตุที่เป็นไปได้:</b> 
+                <ul>
+                    <li>พนักงานขาดทักษะหรือเครื่องจักรทำงานผิดปกติทำให้เกิดของเสีย (Scrap)</li>
+                    <li>คุณภาพของวัตถุดิบต่ำกว่ามาตรฐาน ทำให้ต้องใช้ปริมาณมากขึ้นในการผลิต</li>
+                    <li>มีการเปลี่ยนแปลงกระบวนการผลิตโดยไม่ได้ปรับปรุงค่ามาตรฐาน (Standard)</li>
+                </ul>
+                <b>4. ข้อเสนอแนะ:</b> ควรเข้าตรวจสอบขั้นตอนการคัดแยกของเสียและตรวจสอบการตั้งค่าเครื่องจักรทันที เพื่อลดการสูญเสียที่อาจเกิดขึ้นต่อเนื่อง
+            </div>
+        ` : `
+            <div class="status-badge status-bad">⚠️ Unfavorable Variance Detected</div>
+            <div class="analysis-card">
+                <b>1. Executive Summary:</b> Product <b>"${p}"</b> consumed <b>${diff} ${unit}</b> more than the standard allowance, representing a <b>${percent}%</b> negative deviation.<br><br>
+                <b>2. Financial Impact:</b> This inefficiency has resulted in an additional cost of <b>$${mqvFormatted}</b>, directly reducing the production's cost-effectiveness.<br><br>
+                <b>3. Probable Root Causes:</b> Material wastage, poor machine calibration, or low-quality raw materials requiring higher consumption rates.<br><br>
+                <b>4. Action Plan:</b> Immediate production floor audit is recommended to identify leakage points and re-train staff on material handling.
+            </div>
+        `;
+    } else if (mqv < 0) {
+        return lang === "th" ? `
+            <div class="status-badge status-good">✅ ประหยัดต้นทุนได้ (Favorable)</div>
+            <div class="analysis-card">
+                <b>1. บทสรุปการทำงาน:</b> ยินดีด้วย! ผลิตภัณฑ์ <b>"${p}"</b> สามารถควบคุมการใช้วัตถุดิบได้ต่ำกว่าเป้าหมายถึง <b>${diff} ${unit}</b> (คิดเป็นประสิทธิภาพที่เพิ่มขึ้น <b>${percent}%</b>)<br><br>
+                <b>2. ผลกระทบด้านการเงิน:</b> ความสามารถในการประหยัดทรัพยากรครั้งนี้ ช่วยลดต้นทุนการผลิตลงได้ <b>${mqvFormatted} บาท</b> ซึ่งช่วยเสริมสร้างความสามารถในการแข่งขันด้านราคา<br><br>
+                <b>3. การวิเคราะห์สาเหตุที่เป็นไปได้:</b> 
+                <ul>
+                    <li>พนักงานมีความเชี่ยวชาญสูงในการบริหารจัดการทรัพยากร</li>
+                    <li>มีการปรับปรุงเทคโนโลยีหรือขั้นตอนการผลิตที่มีประสิทธิภาพมากขึ้น</li>
+                    <li>วัตถุดิบที่ซื้อมามีคุณภาพสูงกว่าค่าเฉลี่ย ทำให้เกิดของเสียน้อยลง</li>
+                </ul>
+                <b>4. ข้อเสนอแนะ:</b> ควรศึกษาและถอดบทเรียน (Best Practice) จากรอบการผลิตนี้ เพื่อนำไปประยุกต์ใช้กับผลิตภัณฑ์อื่นหรือกะการทำงานอื่นต่อไป
+            </div>
+        ` : `
+            <div class="status-badge status-good">✅ Favorable Variance Achieved</div>
+            <div class="analysis-card">
+                <b>1. Executive Summary:</b> Product <b>"${p}"</b> achieved high efficiency, using <b>${diff} ${unit}</b> less than standard, a <b>${percent}%</b> improvement.<br><br>
+                <b>2. Financial Impact:</b> This efficiency has saved <b>$${mqvFormatted}</b> in material costs, enhancing the overall project margin.<br><br>
+                <b>3. Probable Root Causes:</b> Improved process optimization, high-quality material input, or exceptional skill in production handling.<br><br>
+                <b>4. Action Plan:</b> Document this process as a "Best Practice" to standardize high-efficiency methods across other production lines.
+            </div>
+        `;
+    } else {
+        return lang === "th" ? `
+            <div class="status-badge status-good">🎯 เป็นไปตามแผน (Ideal)</div>
+            <div class="analysis-card">
+                <b>วิเคราะห์ผล:</b> ผลิตภัณฑ์ <b>"${p}"</b> มีการใช้วัตถุดิบตรงตามมาตรฐานที่กำหนดไว้ 100% สะท้อนถึงการควบคุมการผลิตที่แม่นยำและมาตรฐานที่กำหนดมีความสอดคล้องกับสภาพความเป็นจริง
+            </div>
+        ` : `
+            <div class="status-badge status-good">🎯 Perfect Alignment</div>
+            <div class="analysis-card">
+                <b>Analysis:</b> Product <b>"${p}"</b> material usage is perfectly aligned with the standard. This indicates excellent process stability and realistic standard setting.
+            </div>
+        `;
+    }
+}
+
+function renderResult(record) {
+    const output = document.getElementById("output");
+    output.style.display = "block";
+    output.innerHTML = `
+        <div style="font-size: 1.2em; margin-bottom: 10px;">
+            <b>สูตรคำนวณ:</b> (AQ - SQ) × SP <br>
+            <b>แทนค่า:</b> (${record.aq} - ${record.sq}) × ${record.sp} = <span style="font-size:1.3em; color:${record.mqv > 0 ? 'var(--danger-color)' : 'var(--success-color)'}"><b>${record.mqv.toFixed(2)}</b></span>
+        </div>
+        ${generateDetailedAnalysis(record)}
+    `;
+
+    if (chart) chart.destroy();
+    const ctx = document.getElementById('chart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['ปริมาณจริง (Actual)', 'ปริมาณมาตรฐาน (Standard)'],
+            datasets: [{
+                label: record.unit,
+                data: [record.aq, record.sq],
+                backgroundColor: ['#005f99', '#99ccff'],
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
+
+function renderHistory() {
+    let table = document.getElementById("historyTable");
+    table.innerHTML = `<tr>${TEXT[lang].headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+    historyData.slice().reverse().forEach((r, idx) => {
+        let row = table.insertRow();
+        row.innerHTML = `
+            <td>${r.p}</td>
+            <td>${r.aq}</td>
+            <td>${r.sq}</td>
+            <td>${r.sp}</td>
+            <td style="color:${r.mqv > 0 ? 'red' : 'green'}"><b>${r.mqv.toFixed(2)}</b></td>
+            <td><button class="view-btn" onclick="showOldRecord(${historyData.length - 1 - idx})">${TEXT[lang].headers[5]}</button></td>
+        `;
+    });
+}
+
+function showOldRecord(index) {
+    renderResult(historyData[index]);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+applyLanguage();
+</script>
+</body>
+</html>
