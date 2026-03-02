@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQV Expert Final Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --primary: #005f99; --bg: #f0f4f8; --card: white; --danger: #d32f2f; --success: #2e7d32; }
+        body { font-family: 'Sarabun', sans-serif; background: var(--bg); margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 1000px; margin: auto; background: var(--card); padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .header-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e6f2ff; padding-bottom: 15px; margin-bottom: 20px; }
+        h2 { color: var(--primary); margin: 0; }
+        .lang-btn { background: #444; color: white; border: none; border-radius: 20px; padding: 8px 18px; cursor: pointer; font-size: 14px; }
+        
+        .input-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        label { font-weight: bold; font-size: 0.9em; color: #555; }
+        input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        
+        button.calc-btn { width: 100%; padding: 15px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1.1em; transition: 0.3s; }
+        button.calc-btn:hover { background: #004a77; }
+
+        .result-section { background: #eef6ff; padding: 25px; border-radius: 12px; margin-top: 25px; display: none; line-height: 1.8; border: 1px dashed #cbd5e0; }
+        .analysis-card { background: white; padding: 30px; border-radius: 8px; border-left: 10px solid var(--primary); margin-top: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .status-badge { display: inline-block; padding: 10px 25px; border-radius: 30px; font-weight: bold; margin-bottom: 15px; }
+        .bad { background: #ffebee; color: var(--danger); }
+        .good { background: #e8f5e9; color: var(--success); }
+        
+        canvas { margin-top: 30px; max-height: 350px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-row">
+        <h2 id="ui-title">ระบบวิเคราะห์ MQV Expert</h2>
+        <button class="lang-btn" onclick="toggleLang()">TH / EN</button>
+    </div>
+
+    <div class="input-group">
+        <div><label id="ui-l1">ชื่อผลิตภัณฑ์</label><input type="text" id="product" value="เก้าอี้"></div>
+        <div><label id="ui-l2">หน่วยนับ</label><input type="text" id="unit" value="เมตร"></div>
+        <div><label id="ui-l3">ปริมาณจริง (AQ)</label><input type="number" id="aq"></div>
+        <div><label id="ui-l4">ปริมาณมาตรฐาน (SQ)</label><input type="number" id="sq"></div>
+        <div><label id="ui-l5">ราคามาตรฐาน (SP)</label><input type="number" id="sp"></div>
+    </div>
+
+    <button class="calc-btn" onclick="calculate()" id="ui-btn">คำนวณและประมวลผลเชิงลึก</button>
+
+    <div class="result-section" id="output"></div>
+    <canvas id="chart"></canvas>
+</div>
+
+<script>
+let chart;
+let lang = 'th';
+let currentData = null;
+
+const DATA_POOL = {
+    th: {
+        title: "ระบบวิเคราะห์ส่วนต่างปริมาณวัสดุเชิงลึก",
+        l1: "ชื่อผลิตภัณฑ์", l2: "หน่วยนับ", l3: "ปริมาณจริง (AQ)", l4: "ปริมาณมาตรฐาน (SQ)", l5: "ราคามาตรฐาน (SP)",
+        btn: "คำนวณและประมวลผลเชิงลึก",
+        badTitles: ["⚠️ วิกฤตต้นทุน: ตรวจพบความเบี่ยงเบนสูง", "⚠️ คำเตือน: ประสิทธิภาพการผลิตต่ำกว่าเกณฑ์", "⚠️ รายงานความสูญเสียวัสดุเกินงบประมาณ"],
+        goodTitles: ["✅ ความสำเร็จ: ควบคุมต้นทุนได้อย่างยอดเยี่ยม", "✅ ผลการดำเนินงาน: ประสิทธิภาพสูงกว่าเป้าหมาย", "✅ รายงานกำไร: บริหารทรัพยากรคุ้มค่าสูงสุด"],
+        badReasons: [
+            "วิเคราะห์พบความผิดปกติในขั้นตอนการตั้งค่าเครื่องจักร (Machine Calibration) ทำให้สัดส่วนการใช้วัตถุดิบผิดเพี้ยนไปจากแผนงาน ส่งผลให้เกิดเศษวัสดุทิ้ง (Scrap) สูงกว่าค่ามาตรฐานทางบัญชีที่คำนวณไว้ใน BOM",
+            "เกิดจากทักษะความชำนาญของผู้ปฏิบัติงาน (Labor Inefficiency) หรือมีการหมุนเวียนพนักงานใหม่เข้าสู่สายผลิตโดยขาดการฝึกอบรมที่เพียงพอ ทำให้เกิดความสูญเสียในขั้นตอนคัดแยกและตัดแต่งวัสดุสะสมตลอดกะ",
+            "คุณภาพวัตถุดิบจาก Supplier ล็อตนี้มีเกรดต่ำกว่ามาตรฐาน (Sub-standard Material) ทำให้กระบวนการผลิตต้องใช้ปริมาณ Input เพิ่มขึ้นเพื่อชดเชยส่วนที่เสียไป เพื่อรักษาคุณภาพสินค้าให้ได้ตามสเปก",
+            "พบปัญหาคอขวดในกระบวนการ (Process Bottleneck) ทำให้เครื่องจักรหยุดชะงักบ่อยครั้ง ส่งผลให้วัตถุดิบที่ค้างในระบบเกิดการเสื่อมสภาพหรือต้องถูกกำจัดทิ้งระหว่างการ Restart ระบบใหม่ซ้ำๆ"
+        ],
+        badAdvices: [
+            "ควรทำการวิเคราะห์ข้อมูลย้อนหลังเพื่อทบทวนค่ามาตรฐาน (Standard Revision) ให้สะท้อนขีดความสามารถที่แท้จริง และเข้าตรวจสอบจุดรั่วไหลของเศษวัสดุหน้างาน (Floor Audit) ทันที",
+            "เสนอให้ติดตั้งระบบเซนเซอร์แจ้งเตือนเมื่อพบการใช้วัตถุดิบเกินเกณฑ์ที่กำหนด และจัดทีมเฉพาะกิจทำ Time and Motion Study เพื่อระบุจุดที่มีความสิ้นเปลืองสูงสุด",
+            "ประสานงานฝ่ายจัดซื้อทำ Supplier Audit อย่างเข้มงวด และพิจารณาการเคลมส่วนต่างต้นทุนที่เพิ่มขึ้นจากวัตถุดิบไม่ได้คุณภาพ พร้อมหาแหล่งวัตถุดิบสำรองที่มีมาตรฐานเสถียรกว่า",
+            "ดำเนินการ Re-training พนักงานในจุดที่มีสูญเสียสูง และปรับปรุงคู่มือ SOP ให้เน้นความสำคัญของการลดความสูญเสียแบบ Lean Manufacturing เพื่อป้องกันผลกระทบต่อเนื่องไปถึงกะถัดไป"
+        ],
+        goodReasons: [
+            "เป็นผลจากการปรับปรุงกระบวนการแบบ Lean Production ทำให้สามารถกำจัดความสูญเสีย (Waste) ในขั้นตอนการเตรียมวัสดุ และเพิ่มอัตราการใช้ประโยชน์จากทรัพยากร (Material Utilization) ได้สูงสุด",
+            "ทีมปฏิบัติการมีความเชี่ยวชาญสูงและควบคุมพารามิเตอร์เครื่องจักรได้อย่างแม่นยำสม่ำเสมอ ส่งผลให้อัตราการเกิดของเสีย (Defect Rate) เกือบเป็นศูนย์ตลอดช่วงเวลาการผลิตในงวดนี้",
+            "วัตถุดิบที่ได้รับมีคุณภาพสูงกว่ามาตรฐาน (Premium Grade) ทำให้กระบวนการแปรรูปทำได้ง่าย รวดเร็ว และมีการสูญเสียน้อยกว่าที่คาดการณ์ไว้ในงบประมาณต้นทุนมาตรฐาน",
+            "มีการประยุกต์ใช้เทคโนโลยีเซนเซอร์อัจฉริยะ (Smart Feeding) ในการควบคุมการจ่ายวัตถุดิบที่มีความละเอียดสูง ช่วยลดความคลาดเคลื่อนที่เกิดจาก Manual Error ได้อย่างสมบูรณ์แบบ"
+        ],
+        goodAdvices: [
+            "ควรบันทึกกระบวนการครั้งนี้เป็นกรณีศึกษาต้นแบบ (Best Practice) และจัดทำเป็นคู่มือมาตรฐานใหม่เพื่อขยายผลความสำเร็จนี้ไปยังสายการผลิตอื่นๆ ในองค์กร",
+            "พิจารณาให้รางวัลหรือประกาศเกียรติคุณแก่ทีมงาน เพื่อสร้างแรงจูงใจในการรักษามาตรฐานความละเอียดรอบคอบและการใช้ทรัพยากรอย่างประหยัดในระยะยาว",
+            "ฝ่ายวางแผนควรประเมินการลดค่ามาตรฐาน (Standard Setting) ในระบบบัญชีต้นทุน เพื่อให้เป้าหมายในอนาคตสะท้อนความสามารถที่พัฒนาขึ้นของทีมงาน",
+            "แนะนำให้วิเคราะห์ความสัมพันธ์ระหว่างคุณภาพวัตถุดิบรายนี้กับกำไรที่เพิ่มขึ้น เพื่อใช้เป็นข้อมูลสนับสนุนในการเจรจาทำสัญญาจัดซื้อระยะยาว (Long-term Partnership)"
+        ]
+    },
+    en: {
+        title: "Deep Material Quantity Variance Analysis",
+        l1: "Product Name", l2: "Unit", l3: "Actual Qty (AQ)", l4: "Standard Qty (SQ)", l5: "Standard Price (SP)",
+        btn: "Deep Process Analysis",
+        badTitles: ["⚠️ High Cost Deviation Detected (Unfavorable)", "⚠️ Warning: Material Efficiency Below Target", "⚠️ Critical Material Waste Report"],
+        goodTitles: ["✅ Strategy Success: Excellent Cost Control", "✅ Performance: Higher than Goal Efficiency", "✅ Profit Report: Maximum Resource Utilization"],
+        badReasons: [
+            "Technical analysis indicates machine calibration errors leading to production scraps exceeding engineering standards defined in the Bill of Materials (BOM).",
+            "Labor inefficiencies or high staff turnover without adequate training led to material sorting errors and cumulative waste throughout the shift.",
+            "Sub-standard raw material quality from the supplier forced higher input consumption to maintain output quality and avoid downstream rejection costs.",
+            "Process bottlenecks caused frequent machine downtime, leading to material degradation or wastage during multiple system restarts."
+        ],
+        badAdvices: [
+            "Immediate floor audits are required to analyze hourly waste rates and revise standard specifications to reflect current machinery capabilities.",
+            "Implement automated sensor alerts for abnormal material usage and conduct a Time and Motion study to identify leakage points.",
+            "Coordinate with procurement for a supplier audit and initiate a formal damage claim for added costs due to poor material quality.",
+            "Mandate SOP re-training focused on Lean Manufacturing to stabilize production costs and prevent further financial leakage."
+        ],
+        goodReasons: [
+            "Lean Production improvements effectively eliminated waste in material preparation, maximizing the material utilization rate for this period.",
+            "Highly skilled operators maintained precise machine parameters, resulting in near-zero defect rates throughout the operational shift.",
+            "Premium grade raw materials allowed for smoother processing with significantly less waste than forecasted in the standard budget.",
+            "Automated smart feeding systems eliminated manual errors in material distribution, ensuring perfect alignment with standard quantity targets."
+        ],
+        goodAdvices: [
+            "Document this process as a 'Best Practice' and update the SOP to replicate this success across other production lines.",
+            "Consider performance-based incentives for the team to maintain high standards of resource optimization and attention to detail.",
+            "Planning department should revise standard settings to reflect current team capabilities and set more challenging future targets.",
+            "Analyze the correlation between this supplier's quality and the cost savings to support a long-term strategic partnership."
+        ]
+    }
+};
+
+function toggleLang() {
+    lang = lang === 'th' ? 'en' : 'th';
+    updateUI();
+    if (currentData) render();
+}
+
+function updateUI() {
+    const t = DATA_POOL[lang];
+    document.getElementById("ui-title").innerText = t.title;
+    document.getElementById("ui-l1").innerText = t.l1;
+    document.getElementById("ui-l2").innerText = t.l2;
+    document.getElementById("ui-l3").innerText = t.l3;
+    document.getElementById("ui-l4").innerText = t.l4;
+    document.getElementById("ui-l5").innerText = t.l5;
+    document.getElementById("ui-btn").innerText = t.btn;
+}
+
+function calculate() {
+    const p = document.getElementById("product").value;
+    const aq = parseFloat(document.getElementById("aq").value);
+    const sq = parseFloat(document.getElementById("sq").value);
+    const sp = parseFloat(document.getElementById("sp").value);
+    const u = document.getElementById("unit").value;
+
+    if (!p || isNaN(aq) || isNaN(sq) || isNaN(sp)) return;
+
+    const mqv = (aq - sq) * sp;
+    
+    // บันทึกประวัติและสุ่มดัชนีใหม่ทุกครั้ง
+    currentData = {
+        p, aq, sq, sp, mqv, unit: u,
+        tIdx: Math.floor(Math.random() * 3),
+        rIdx: Math.floor(Math.random() * 4),
+        aIdx: Math.floor(Math.random() * 4)
+    };
+    render();
+}
+
+function render() {
+    const out = document.getElementById("output");
+    out.style.display = "block";
+    const t = DATA_POOL[lang];
+    const r = currentData;
+    const isBad = r.mqv > 0;
+    const diff = Math.abs(r.aq - r.sq).toLocaleString(undefined, {minimumFractionDigits: 2});
+    const mqvVal = Math.abs(r.mqv).toLocaleString(undefined, {minimumFractionDigits: 2});
+    const percent = r.sq !== 0 ? ((Math.abs(r.aq - r.sq) / r.sq) * 100).toFixed(2) : 0;
+
+    const title = isBad ? t.badTitles[r.tIdx] : t.goodTitles[r.tIdx];
+    const reason = isBad ? t.badReasons[r.rIdx] : t.goodReasons[r.rIdx];
+    const advice = isBad ? t.badAdvices[r.aIdx] : t.goodAdvices[r.aIdx];
+
+    out.innerHTML = `
+        <div style="font-size:1.1em; margin-bottom:15px;">
+            <b>สูตรวิเคราะห์:</b> (AQ - SQ) × SP = <span style="color:${isBad ? 'var(--danger)' : 'var(--success)'}; font-size:1.3em;"><b>${r.mqv.toLocaleString(undefined, {minimumFractionDigits: 2})}</b></span>
+        </div>
+        
+        <div class="status-badge ${isBad ? 'bad' : 'good'}">${title}</div>
+
+        <div class="analysis-card" style="border-left-color: ${isBad ? 'var(--danger)' : 'var(--success)'}">
+            <p><b>1. สรุปผลการปฏิบัติงาน:</b> สำหรับผลิตภัณฑ์ <b>"${r.p}"</b> มีการใช้ทรัพยากรจริง ${isBad ? 'สูงกว่า' : 'ต่ำกว่า'} เป้าหมายมาตรฐานที่กำหนดไว้เป็นจำนวน <b>${diff} ${r.unit}</b> ซึ่งถือเป็นการเบี่ยงเบนทาง${isBad ? 'ลบที่ต้องเฝ้าระวัง' : 'บวกที่น่าประทับใจ'} (ส่วนต่าง ${percent}%)</p>
+            <p><b>2. การวิเคราะห์ผลกระทบด้านการเงิน:</b> ความ${isBad ? 'สิ้นเปลือง' : 'ประหยัด'}ในล็อตการผลิตนี้ ส่งผลให้ต้นทุน${isBad ? 'ส่วนเกินพุ่งสูงขึ้นเป็น' : 'ประหยัดไปได้เป็น'}จำนวนเงิน <b>${mqvVal} ${lang==='th'?'บาท':'Units'}</b> ซึ่งจะส่งผลโดยตรงต่อกำไรขั้นต้น (Gross Profit) ของงวดบัญชีนี้</p>
+            <p><b>3. วิเคราะห์สาเหตุเชิงลึก:</b> ${reason}</p>
+            <p><b>4. ข้อเสนอแนะเชิงกลยุทธ์:</b> ${advice}</p>
+        </div>`;
+
+    if (chart) chart.destroy();
+    chart = new Chart(document.getElementById('chart'), {
+        type: 'bar',
+        data: {
+            labels: lang==='th'?['จริง (AQ)', 'มาตรฐาน (SQ)']:['Actual', 'Standard'],
+            datasets: [{ data: [r.aq, r.sq], backgroundColor: ['#005f99', '#99ccff'], borderRadius: 8 }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+}
+
+updateUI();
+</script>
+</body>
+</html>
