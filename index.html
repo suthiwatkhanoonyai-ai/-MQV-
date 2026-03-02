@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQV Expert Pro Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --primary: #005f99; --bg: #f0f4f8; --card: white; --danger: #d32f2f; --success: #2e7d32; }
+        body { font-family: 'Sarabun', sans-serif; background: var(--bg); margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 1000px; margin: auto; background: var(--card); padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: var(--primary); border-bottom: 2px solid #e6f2ff; padding-bottom: 15px; }
+        .input-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        label { font-weight: bold; font-size: 0.9em; color: #555; }
+        input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; padding: 15px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1em; margin-top: 10px; }
+        .result-section { background: #eef6ff; padding: 25px; border-radius: 12px; margin-top: 25px; display: none; line-height: 1.8; }
+        .analysis-card { background: white; padding: 30px; border-radius: 8px; border-left: 8px solid var(--primary); margin-top: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .status-badge { display: inline-block; padding: 8px 20px; border-radius: 30px; font-weight: bold; margin-bottom: 15px; }
+        .bad { background: #ffebee; color: var(--danger); }
+        .good { background: #e8f5e9; color: var(--success); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 id="title">ระบบวิเคราะห์ต้นทุน MQV เชิงลึก</h2>
+    <div class="input-group">
+        <div><label>ชื่อผลิตภัณฑ์</label><input type="text" id="product" value="เก้าอี้"></div>
+        <div><label>หน่วยนับ</label><input type="text" id="unit" value="เมตร"></div>
+        <div><label>ปริมาณที่ใช้จริง (AQ)</label><input type="number" id="aq" value="5600"></div>
+        <div><label>ปริมาณมาตรฐาน (SQ)</label><input type="number" id="sq" value="4800"></div>
+        <div><label>ราคามาตรฐาน (SP)</label><input type="number" id="sp" value="50"></div>
+    </div>
+    <button onclick="calculate()">คำนวณและประมวลผลเชิงลึก</button>
+    <div class="result-section" id="output"></div>
+    <canvas id="chart"></canvas>
+</div>
+
+<script>
+let chart;
+
+const DATA_POOL = {
+    bad: {
+        titles: [
+            "⚠️ วิกฤตต้นทุน: ตรวจพบความเบี่ยงเบนของทรัพยากรสูงกว่าเกณฑ์ควบคุม",
+            "⚠️ คำเตือนระดับสูง: ประสิทธิภาพการผลิตลดลงอย่างมีนัยสำคัญ",
+            "⚠️ รายงานความสูญเสีย: ต้นทุนวัตถุดิบเกินงบประมาณที่ได้รับอนุมัติ"
+        ],
+        reasons: [
+            "เกิดจากความผิดปกติในการตั้งค่าและ Calibration เครื่องจักรหลัก (Machine Error) ส่งผลให้เกิดของเสีย (Scrap) ในช่วงเริ่มต้นการผลิตสูงเกินกว่าค่ามาตรฐานทางวิศวกรรมที่กำหนดไว้ใน BOM",
+            "พบปัญหาด้านทักษะความชำนาญของบุคลากร (Labor Inefficiency) ซึ่งอาจเกิดจากการหมุนเวียนพนักงานชุดใหม่เข้าสู่สายงานโดยขาดการฝึกอบรมที่เพียงพอ ทำให้เกิดความคลาดเคลื่อนในการตัดแต่งวัตถุดิบสะสมตลอดกะ",
+            "คุณภาพของวัตถุดิบจาก Supplier ในล็อตนี้มีเกรด (Material Grade) ต่ำกว่ามาตรฐานเทคนิค ทำให้ฝ่ายผลิตต้องเพิ่มปริมาณ Input มากขึ้นเพื่อให้ได้ Output ที่มีคุณภาพตามสเปกสินค้า",
+            "เกิดจากปัญหาคอขวดในระบบลำเลียง (Bottleneck) และการหยุดชะงักของเครื่องจักรบ่อยครั้ง ทำให้วัตถุดิบที่ค้างในระบบเสื่อมสภาพหรือต้องถูกทิ้งระหว่างการ Restart กระบวนการใหม่"
+        ],
+        advices: [
+            "ควรจัดตั้งทีมเฉพาะกิจ (Task Force) เข้าดำเนินการสำรวจหน้างาน (Gemba Walk) ทันทีเพื่อทำ Time Study และระบุจุดที่เศษวัสดุรั่วไหล พร้อมปรับปรุงค่ามาตรฐานให้สอดคล้องกับสภาพปัจจุบัน",
+            "เร่งรัดการฝึกอบรมซ้ำ (Re-training) ให้แก่พนักงานในจุดที่มีการสูญเสียสูงสุด พร้อมติดตั้งระบบ Visual Control แสดงสถานะการใช้ทรัพยากรแบบ Real-time เพื่อสร้างความตระหนักด้านต้นทุน",
+            "ประสานงานฝ่ายจัดซื้อตรวจสอบคุณภาพวัตถุดิบต้นทาง (Supplier Audit) อย่างเข้มงวด และพิจารณาการเคลมค่าเสียหายจากต้นทุนที่เพิ่มขึ้นเนื่องจากวัตถุดิบไม่ได้มาตรฐานตามสัญญา",
+            "แนะนำให้ลงทุนในระบบบำรุงรักษาเชิงพยากรณ์ (Predictive Maintenance) เพื่อลดโอกาสเครื่องจักรหยุดกะทันหัน ซึ่งเป็นสาเหตุหลักของการสูญเสียวัตถุดิบจำนวนมากในแต่ละรอบการผลิต"
+        ]
+    },
+    good: {
+        titles: [
+            "✅ ความสำเร็จเชิงกลยุทธ์: ควบคุมต้นทุนการผลิตได้อย่างยอดเยี่ยม",
+            "✅ รายงานผลการดำเนินงาน: ประสิทธิภาพการใช้ทรัพยากรสูงกว่าค่าเฉลี่ยอุตสาหกรรม",
+            "✅ รายงานกำไรส่วนเกิน: การบริหารจัดการทรัพยากรทำได้อย่างคุ้มค่าสูงสุด"
+        ],
+        reasons: [
+            "เป็นผลจากการปรับปรุงกระบวนการทำงานภายใต้แนวคิด Lean Production อย่างต่อเนื่อง ทำให้สามารถกำจัดความสูญเสียในขั้นตอนการเตรียมวัสดุ และเพิ่มอัตรา Material Utilization ได้เต็มประสิทธิภาพ",
+            "ทีมปฏิบัติการมีความเชี่ยวชาญสูงและควบคุมพารามิเตอร์เครื่องจักรได้อย่างแม่นยำสม่ำเสมอ ส่งผลให้อัตราของเสีย (Defect Rate) เกือบเป็นศูนย์ตลอดช่วงการผลิตในงวดนี้",
+            "วัตถุดิบจาก Supplier มีคุณภาพสูงกว่าเกณฑ์มาตรฐาน ทำให้กระบวนการแปรรูปทำได้รวดเร็ว และมีการสูญเสียระหว่างทางน้อยกว่าที่คาดการณ์ไว้ในสูตรการผลิต (BOM)",
+            "มีการประยุกต์ใช้เทคโนโลยีเซนเซอร์อัจฉริยะ (Smart Feeding) ในการควบคุมการจ่ายวัตถุดิบที่มีความละเอียดสูง ช่วยลดความคลาดเคลื่อนที่เกิดจากการทำงานด้วยมือ (Manual Error)"
+        ],
+        advices: [
+            "ควรบันทึกกระบวนการครั้งนี้เป็นกรณีศึกษาต้นแบบ (Best Practice) และจัดทำคู่มือมาตรฐานใหม่ (New SOP) เพื่อขยายผลความสำเร็จนี้ไปยังสายการผลิตอื่นๆ",
+            "พิจารณาให้รางวัลตอบแทนประสิทธิภาพ (Incentive) หรือประกาศเกียรติคุณแก่ทีมงาน เพื่อสร้างแรงจูงใจในการรักษามาตรฐานความละเอียดรอบคอบในระยะยาว",
+            "ฝ่ายวางแผนควรนำข้อมูลชุดนี้ไปพิจารณาปรับลดค่ามาตรฐาน (Standard Revision) ในระบบบัญชีต้นทุน เพื่อให้เป้าหมายในอนาคตสะท้อนขีดความสามารถที่แท้จริง",
+            "แนะนำให้วิเคราะห์ความสัมพันธ์เชิงลึกระหว่างคุณภาพวัตถุดิบรายนี้กับกำไรที่เพิ่มขึ้น เพื่อเป็นข้อมูลในการทำสัญญาจัดซื้อระยะยาว (Long-term Partnership)"
+        ]
+    }
+};
+
+function calculate() {
+    const p = document.getElementById("product").value;
+    const aq = parseFloat(document.getElementById("aq").value);
+    const sq = parseFloat(document.getElementById("sq").value);
+    const sp = parseFloat(document.getElementById("sp").value);
+    const u = document.getElementById("unit").value;
+
+    if (!p || isNaN(aq) || isNaN(sq) || isNaN(sp)) return;
+
+    const mqv = (aq - sq) * sp;
+    const diff = Math.abs(aq - sq).toFixed(2);
+    const percent = ((Math.abs(aq - sq) / sq) * 100).toFixed(2);
+    const isBad = mqv > 0;
+    const pool = isBad ? DATA_POOL.bad : DATA_POOL.good;
+
+    // สุ่มเลือกหัวข้อ สาเหตุ และคำแนะนำแยกกันทุกครั้งที่กด
+    const title = pool.titles[Math.floor(Math.random() * pool.titles.length)];
+    const reason = pool.reasons[Math.floor(Math.random() * pool.reasons.length)];
+    const advice = pool.advices[Math.floor(Math.random() * pool.advices.length)];
+
+    const out = document.getElementById("output");
+    out.style.display = "block";
+    out.innerHTML = `
+        <div style="font-size: 1.1em; margin-bottom: 15px;">
+            <b>สูตรคำนวณ:</b> (AQ - SQ) × SP | <b>แทนค่า:</b> (${aq} - ${sq}) × ${sp} = 
+            <span style="color:${isBad ? 'var(--danger)' : 'var(--success)'}; font-size: 1.4em;"><b>${mqv.toLocaleString()}</b></span>
+        </div>
+        <div class="status-badge ${isBad ? 'bad' : 'good'}">${title}</div>
+        <div class="analysis-card" style="border-left-color: ${isBad ? 'var(--danger)' : 'var(--success)'}">
+            <b>1. บทสรุปการปฏิบัติงาน:</b> ผลิตภัณฑ์ <b>"${p}"</b> มีการใช้ทรัพยากรจริง ${isBad ? 'สูง' : 'ต่ำ'}กว่าเป้าหมาย <b>${diff} ${u}</b> (เบี่ยงเบน ${percent}%)<br><br>
+            <b>2. วิเคราะห์ผลกระทบทางการเงิน:</b> การดำเนินงานครั้งนี้ส่งผลให้${isBad ? 'เกิดต้นทุนส่วนเกิน' : 'ประหยัดต้นทุนไปได้'} <b>${Math.abs(mqv).toLocaleString()} บาท</b> ซึ่งจะส่งผลโดยตรงต่อกำไรขั้นต้นในงวดบัญชีนี้<br><br>
+            <b>3. การวิเคราะห์สาเหตุเชิงลึก:</b> ${reason}<br><br>
+            <b>4. ข้อเสนอแนะและแผนปฏิบัติงาน:</b> ${advice}
+        </div>`;
+
+    updateChart(aq, sq);
+}
+
+function updateChart(aq, sq) {
+    if (chart) chart.destroy();
+    const ctx = document.getElementById('chart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['ปริมาณจริง (AQ)', 'ปริมาณมาตรฐาน (SQ)'],
+            datasets: [{
+                label: 'ปริมาณ',
+                data: [aq, sq],
+                backgroundColor: ['#005f99', '#99ccff'],
+                borderRadius: 8
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+}
+</script>
+</body>
+</html>
