@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MQV Expert Final Pro</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    :root { --primary: #005f99; --bg: #f0f4f8; --card: white; --danger: #d32f2f; --success: #2e7d32; }
+    body { font-family: 'Sarabun', sans-serif; background: var(--bg); margin: 0; padding: 20px; color: #333; }
+    .container { max-width: 1000px; margin: auto; background: var(--card); padding: 35px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); }
+    h2 { text-align: center; color: var(--primary); border-bottom: 3px solid #e6f2ff; padding-bottom: 20px; margin-top: 0; }
+    .input-group { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; }
+    @media (max-width: 600px) { .input-group { grid-template-columns: 1fr; } }
+    label { font-weight: bold; font-size: 0.95em; color: #444; }
+    input { width: 100%; padding: 12px; border: 1.5px solid #ccc; border-radius: 10px; box-sizing: border-box; font-size: 16px; transition: 0.3s; margin-top: 8px; }
+    input:focus { border-color: var(--primary); outline: none; background: #faffff; box-shadow: 0 0 10px rgba(0,95,153,0.15); }
+    #calcBtn { width: 100%; padding: 18px; background: var(--primary); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 1.1em; transition: 0.3s; margin-top: 10px; }
+    #calcBtn:hover { background: #004066; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+    .lang-btn { float: right; background: #555; color: white; border: none; border-radius: 25px; padding: 10px 25px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+    .lang-btn:hover { background: #333; }
+    .result-section { background: #f8fbff; padding: 30px; border-radius: 15px; margin-top: 30px; display: none; border: 1px solid #e0e8f0; animation: slideUp 0.5s ease-out; }
+    .analysis-card { background: white; padding: 35px; border-radius: 12px; border-left: 10px solid var(--primary); margin-top: 25px; box-shadow: 0 5px 20px rgba(0,0,0,0.05); line-height: 1.9; }
+    .status-badge { display: inline-block; padding: 10px 25px; border-radius: 50px; font-weight: bold; margin-bottom: 20px; font-size: 1.1em; }
+    .bad { background: #ffebee; color: var(--danger); }
+    .good { background: #e8f5e9; color: var(--success); }
+    canvas { margin-top: 40px; max-height: 400px; }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <button class="lang-btn" onclick="toggleLang()">TH / EN</button>
+    <h2 id="title">ระบบวิเคราะห์ต้นทุน MQV</h2>
+
+    <div class="input-group">
+        <div><label id="l1"></label><input type="text" id="product"></div>
+        <div><label id="l5"></label><input type="text" id="unit"></div>
+        <div><label id="l2"></label><input type="number" id="aq"></div>
+        <div><label id="l3"></label><input type="number" id="sq"></div>
+        <div><label id="l4"></label><input type="number" id="sp"></div>
+    </div>
+
+    <button onclick="calculate()" id="calcBtn"></button>
+
+    <div class="result-section" id="output"></div>
+    <canvas id="chart"></canvas>
+</div>
+
+<script>
+let chart;
+let lang = "th";
+let currentRecord = null;
+
+const TEXT = {
+    th: {
+        title: "ระบบวิเคราะห์ส่วนต่างปริมาณวัสดุเชิงลึก (MQV Deep Analysis)",
+        product: "ชื่อผลิตภัณฑ์/วัสดุ", aq: "ปริมาณที่ใช้จริง (AQ)", sq: "ปริมาณมาตรฐาน (SQ)", sp: "ราคามาตรฐานต่อหน่วย (SP)", unit: "หน่วยนับ",
+        calc: "เริ่มการวิเคราะห์เชิงลึกและประมวลผล",
+        badTitle: "⚠️ พบการเบี่ยงเบนของต้นทุนในระดับวิกฤต (Unfavorable)", 
+        goodTitle: "✅ การบริหารต้นทุนมีประสิทธิภาพดีเยี่ยม (Favorable)",
+        sec1: "1. สรุปภาพรวมการปฏิบัติงาน:", sec2: "2. การวิเคราะห์ผลกระทบด้านการเงินและการบริหารงบประมาณอย่างละเอียด:", 
+        sec3: "3. การวิเคราะห์หาสาเหตุเชิงลึกทางเทคนิคและกระบวนการ:", sec4: "4. แผนปฏิบัติงานและข้อเสนอแนะเชิงกลยุทธ์:",
+        badReasons: [
+            "เกิดความสูญเสียในสายการผลิต (Production Scraps) สูงกว่าค่าเฉลี่ยที่กำหนดไว้อย่างมีนัยสำคัญ ซึ่งอาจสืบเนื่องมาจากสภาพความเสื่อมโทรมของเครื่องจักรที่ไม่ได้รับการซ่อมบำรุงตามรอบ หรือพนักงานในกะการทำงานขาดทักษะความชำนาญเฉพาะทางในการควบคุมเครื่องมือ ทำให้เกิดของเสียระหว่างทางจำนวนมาก",
+            "ปัญหาด้านคุณภาพของวัตถุดิบ (Raw Material Quality) ที่ไม่เป็นไปตามเกณฑ์มาตรฐานที่ตกลงไว้กับ Supplier ทำให้ในกระบวนการผลิตจำเป็นต้องใช้ปริมาณวัตถุดิบเพิ่มขึ้นเพื่อชดเชยส่วนที่เสียหาย เพื่อให้สินค้าปลายทางยังคงคุณภาพตามที่ลูกค้าต้องการ ส่งผลให้ยอดการใช้จริงพุ่งสูงขึ้นอย่างผิดปกติ",
+            "เกิดจากการตั้งค่าพารามิเตอร์ของเครื่องจักร (Machine Calibration) ที่คลาดเคลื่อนจากความจริง ทำให้ระบบจ่ายวัตถุดิบทำงานผิดเพี้ยนไปจากแผนงานทางวิศวกรรม รวมถึงอาจมีการรั่วไหลในจุดเชื่อมต่อของระบบลำเลียงที่มองไม่เห็นด้วยตาเปล่าในระหว่างการเดินเครื่องจักรต่อเนื่อง",
+            "ความผิดพลาดของการกำหนดค่ามาตรฐาน (Standard Setting) ที่อาจไม่ได้มีการปรับปรุง (Update) มาเป็นเวลานาน ทำให้ไม่สะท้อนถึงสภาพเทคโนโลยีปัจจุบัน หรือมีการเปลี่ยนแปลงขั้นตอนการทำงานใหม่แต่ยังใช้เกณฑ์การวัดเดิม ทำให้ตัวเลขผลต่างดูเลวร้ายกว่าสภาพความเป็นจริงที่ควรจะเป็น"
+        ],
+        badAdvices: [
+            "ควรจัดตั้งทีมเฉพาะกิจเพื่อเข้าตรวจสอบ (Floor Audit) และสังเกตการณ์พฤติกรรมการผลิตในทันที เพื่อระบุจุดรั่วไหลและวิเคราะห์หาต้นตอของของเสีย (Root Cause Analysis) พร้อมทั้งหยุดการเดินเครื่องหากพบความผิดปกติที่ส่งผลต่อต้นทุนในระยะยาว",
+            "แนะนำให้ฝ่ายจัดซื้อ (Procurement) ดำเนินการตรวจสอบย้อนกลับไปยังล็อตวัตถุดิบที่ใช้งาน และประสานงานกับ Supplier เพื่อเรียกร้องค่าชดเชยจากส่วนต่างที่เกิดขึ้น พร้อมทั้งพิจารณาเปลี่ยนเกณฑ์การรับเข้าวัตถุดิบ (Incoming QC) ให้มีความเข้มงวดมากขึ้นกว่าเดิม",
+            "ต้องมีการเรียกทีมวิศวกรรมเข้าตรวจสอบและปรับแต่งค่ามาตรฐานของเครื่องจักร (Recalibration) ทันที รวมถึงจัดทำตารางการบำรุงรักษาเชิงป้องกัน (Preventive Maintenance) เพื่อลดโอกาสการเกิดปัญหาซ้ำเดิมที่ส่งผลกระทบต่อกำไรสุทธิของบริษัท",
+            "ควรดำเนินการรวบรวมข้อมูลการผลิตย้อนหลังอย่างน้อย 3 เดือน เพื่อนำมาสังเคราะห์และปรับปรุงค่ามาตรฐาน (Standard Revision) ให้สอดคล้องกับสภาพความเป็นจริง เพื่อให้การพยากรณ์งบประมาณในอนาคตมีความแม่นยำและน่าเชื่อถือมากขึ้น"
+        ]
+    },
+    en: {
+        title: "Material Quantity Variance Deep Analysis System",
+        product: "Product/Material Name", aq: "Actual Quantity (AQ)", sq: "Standard Quantity (SQ)", sp: "Standard Price (SP)", unit: "Unit",
+        calc: "Execute Deep Analysis & Processing",
+        badTitle: "⚠️ Critical Cost Variance Detected (Unfavorable)", 
+        goodTitle: "✅ Exceptional Cost Control Performance (Favorable)",
+        sec1: "1. Executive Operational Summary:", sec2: "2. Comprehensive Financial & Budgetary Impact Analysis:", 
+        sec3: "3. Technical & Process Root Cause Investigation:", sec4: "4. Strategic Action Plan & Recommendations:",
+        badReasons: [
+            "Production scrap rates have significantly exceeded standard benchmarks, likely due to deteriorating machinery conditions or a lack of specialized operator expertise, leading to excessive material rejection throughout the manufacturing process.",
+            "Raw material quality issues from the current supply batch have forced the production line to increase consumption to compensate for defects. This was necessary to maintain final product integrity but has resulted in an abnormal spike in material usage.",
+            "Inaccurate machine calibration settings have caused the material feeding system to deviate from engineering specifications, potentially compounded by invisible leakages in the conveyor system during continuous high-speed operations.",
+            "Obsolete standard quantity settings (SQ) that no longer reflect modern technological environments or updated workflow procedures, leading to a variance that appears more severe than the actual operational performance."
+        ],
+        badAdvices: [
+            "Establish a task force for an immediate floor audit to observe production behavior and identify the specific root causes of waste. Machine operations should be halted if critical inefficiencies are detected to prevent further financial leakage.",
+            "Procurement should perform a trace-back on the current material batch and coordinate with the supplier for compensation. Additionally, consider tightening Incoming Quality Control (IQC) parameters to ensure future material compliance.",
+            "Immediate recalibration of machinery by the engineering team is required. A robust Preventive Maintenance (PM) schedule must be implemented to minimize recurring issues that directly erode the company's net profit margins.",
+            "Conduct a comprehensive review of the past 3 months of production data to synthesize and revise the Standard Setting. This ensures that future budgetary forecasting remains accurate, reliable, and reflects true operational capacity."
+        ]
+    }
+};
+
+// --- Enter Navigation System ---
+const inputs = ["product", "unit", "aq", "sq", "sp"];
+inputs.forEach((id, i) => {
+    document.getElementById(id).addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            if (i < inputs.length - 1) document.getElementById(inputs[i+1]).focus();
+            else calculate();
+        }
+    });
+});
+
+function toggleLang() {
+    lang = (lang === "th") ? "en" : "th";
+    applyUI();
+    if(currentRecord) render();
+}
+
+function applyUI() {
+    const t = TEXT[lang];
+    document.getElementById("title").innerText = t.title;
+    document.getElementById("l1").innerText = t.product;
+    document.getElementById("l2").innerText = t.aq;
+    document.getElementById("l3").innerText = t.sq;
+    document.getElementById("l4").innerText = t.sp;
+    document.getElementById("l5").innerText = t.unit;
+    document.getElementById("calcBtn").innerText = t.calc;
+}
+
+function calculate() {
+    const p = document.getElementById("product").value;
+    const aq = parseFloat(document.getElementById("aq").value);
+    const sq = parseFloat(document.getElementById("sq").value);
+    const sp = parseFloat(document.getElementById("sp").value);
+    const u = document.getElementById("unit").value || (lang==='th'?'หน่วย':'Unit');
+
+    if (!p || isNaN(aq) || isNaN(sq) || isNaN(sp)) return;
+
+    const mqv = (aq - sq) * sp;
+    
+    // สร้างการสุ่มใหม่ทุกครั้งที่กดคำนวณ
+    currentRecord = { 
+        p, aq, sq, sp, mqv, unit: u, 
+        rIdx: Math.floor(Math.random() * 4), 
+        aIdx: Math.floor(Math.random() * 4) 
+    };
+    render();
+}
+
+function render() {
+    const out = document.getElementById("output");
+    out.style.display = "block";
+    const t = TEXT[lang];
+    const r = currentRecord;
+    const diff = Math.abs(r.aq - r.sq).toFixed(2);
+    const mqvVal = Math.abs(r.mqv).toLocaleString(undefined, {minimumFractionDigits: 2});
+    const percent = r.sq !== 0 ? ((Math.abs(r.aq - r.sq) / r.sq) * 100).toFixed(2) : 0;
+
+    let content = "";
+    if (r.mqv > 0) {
+        content = `
+            <div class="status-badge bad">${t.badTitle}</div>
+            <div class="analysis-card">
+                <b>${t.sec1}</b> พบว่าผลิตภัณฑ์ <b>"${r.p}"</b> มีการใช้วัตถุดิบจริงเกินกว่าปริมาณมาตรฐานถึง <b>${diff} ${r.unit}</b> หรือคิดเป็นอัตราความสิ้นเปลืองที่สูงถึง <b>${percent}%</b> เมื่อเทียบกับแผนงานหลัก<br><br>
+                <b>${t.sec2}</b> ความเบี่ยงเบนทางลบในครั้งนี้ส่งผลให้ต้นทุนการผลิตจริง (COGS) เพิ่มสูงขึ้นทันที <b>${mqvVal} ${lang==='th'?'บาท':'Currency Units'}</b> ซึ่งจะไปตัดทอนกำไรสุทธิและส่งผลเสียต่อกระแสเงินสดหมุนเวียน หากปล่อยให้สถานการณ์นี้ดำเนินต่อไป อาจทำให้งบประมาณประจำปีเกินขีดจำกัดที่ตั้งไว้ และลดทอนความสามารถในการแข่งขันด้านราคาของบริษัท<br><br>
+                <b>${t.sec3}</b> ${t.badReasons[r.rIdx]}<br><br>
+                <b>${t.sec4}</b> ${t.badAdvices[r.aIdx]}
+            </div>`;
+    } else {
+        content = `
+            <div class="status-badge good">${t.goodTitle}</div>
+            <div class="analysis-card">
+                <b>${t.sec1}</b> ยอดเยี่ยม! การผลิตผลิตภัณฑ์ <b>"${r.p}"</b> สามารถควบคุมการใช้วัตถุดิบได้ต่ำกว่าเป้าหมายถึง <b>${diff} ${r.unit}</b> (เพิ่มประสิทธิภาพได้ ${percent}%)<br><br>
+                <b>${t.sec2}</b> การประหยัดทรัพยากรในรอบนี้ช่วยลดรายจ่ายลงได้ <b>${mqvVal} ${lang==='th'?'บาท':'Currency Units'}</b> ซึ่งจะส่งผลบวกโดยตรงต่ออัตรากำไรขั้นต้น (Gross Profit Margin) และสร้างความได้เปรียบด้านต้นทุนสะสมในระยะยาวให้กับโปรเจกต์นี้<br><br>
+                <b>${t.sec3}</b> สะท้อนถึงมาตราฐานการทำงานที่ยอดเยี่ยมของพนักงานหน้างาน ความแม่นยำในการตั้งค่าเครื่องจักร และคุณภาพของวัตถุดิบที่อยู่ในเกณฑ์ดีเยี่ยมทำให้เกิดการสูญเสียน้อยที่สุดเท่าที่เคยบันทึกไว้<br><br>
+                <b>${t.sec4}</b> แนะนำให้สรุปกระบวนการนี้เป็นกรณีตัวอย่างระดับ Best Practice เพื่อนำไปใช้เป็นมาตรฐานอ้างอิงสำหรับกะการทำงานอื่นหรือผลิตภัณฑ์ที่ใกล้เคียงกัน เพื่อรักษาความยั่งยืนของกำไรในระยะยาว
+            </div>`;
+    }
+
+    out.innerHTML = `<div><b>สูตรการคำนวณ:</b> (AQ - SQ) × SP = <span style="font-size:1.4em; color:${r.mqv>0?'var(--danger)':'var(--success)'}"><b>${r.mqv.toFixed(2)}</b></span></div>${content}`;
+
+    if (chart) chart.destroy();
+    chart = new Chart(document.getElementById('chart'), {
+        type: 'bar',
+        data: {
+            labels: lang==='th'?['ปริมาณใช้จริง (AQ)', 'ปริมาณมาตรฐาน (SQ)']:['Actual (AQ)', 'Standard (SQ)'],
+            datasets: [{ data: [r.aq, r.sq], backgroundColor: ['#005f99', '#99ccff'], borderRadius: 10 }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+}
+
+applyUI();
+</script>
+</body>
+</html>
